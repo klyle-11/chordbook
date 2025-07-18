@@ -32,12 +32,12 @@ export default function SavedProgressions({
     return (
       <div className="mt-8">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold text-gray-800">Saved Progressions</h3>
+          <h3 className="text-xl font-semibold text-gray-800">Saved chord progressions</h3>
           <button
             onClick={onNewProgression}
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
           >
-            New Progression
+            New chord progressions
           </button>
         </div>
         <p className="text-gray-600">No saved progressions yet.</p>
@@ -49,16 +49,16 @@ export default function SavedProgressions({
     <div className="mt-8">
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h3 className="text-xl font-semibold text-gray-800">Saved Progressions</h3>
+          <h3 className="text-xl font-semibold text-gray-800">Saved chord progressions</h3>
           <p className="text-sm text-gray-600">
-            {showAll ? `Showing all ${sortedProgressions.length}` : `Showing ${Math.min(5, sortedProgressions.length)} of ${sortedProgressions.length}`} progressions
+            {showAll ? `Showing all ${sortedProgressions.length}` : `Showing ${Math.min(5, sortedProgressions.length)} of ${sortedProgressions.length}`} chord progressions
           </p>
         </div>
         <button
           onClick={onNewProgression}
           className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
         >
-          New Progression
+          New chord progression
         </button>
       </div>
       

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { isValidChord, getChordSuggestions, getNotesForChord } from '../lib/chordUtils';
+import { isValidChord, getChordSuggestions, getNotesForChord, findChordByNotes } from '../lib/chordUtils';
 import { parseChordInput, addCustomChord } from '../lib/customChordLibrary';
 
 interface ChordFormProps {
@@ -20,7 +20,16 @@ export default function ChordForm({ onAddChord }: ChordFormProps) {
                 // Check if it's a custom chord input format
                 const { isCustomChord, notes } = parseChordInput(trimmedInput);
                 if (isCustomChord) {
-                    setPreviewNotes(notes);
+                    // Check if these notes match an existing chord
+                    const existingChord = findChordByNotes(notes);
+                    if (existingChord) {
+                        // Show preview as the existing chord
+                        const existingNotes = getNotesForChord(existingChord);
+                        setPreviewNotes([`Found: ${existingChord} (${existingNotes.join(", ")})`]);
+                    } else {
+                        // Show as custom chord
+                        setPreviewNotes(notes);
+                    }
                 } else if (isValidChord(trimmedInput)) {
                     const notes = getNotesForChord(trimmedInput);
                     setPreviewNotes(notes);
@@ -50,18 +59,30 @@ export default function ChordForm({ onAddChord }: ChordFormProps) {
         const { isCustomChord, notes } = parseChordInput(trimmedInput);
         
         if (isCustomChord) {
-            // Try to add the custom chord
-            const success = addCustomChord(trimmedInput, notes);
-            if (success) {
-                onAddChord(trimmedInput);
+            // First check if these notes match an existing chord in the library
+            const existingChord = findChordByNotes(notes);
+            
+            if (existingChord) {
+                // Add the existing chord instead of creating a custom one
+                onAddChord(existingChord);
                 setInput("");
                 setError("");
                 setSuggestions([]);
                 setPreviewNotes([]);
             } else {
-                setError(`A chord with notes "${notes.join(", ")}" already exists in your library.`);
-                setSuggestions([]);
-                setPreviewNotes([]);
+                // Try to add as custom chord since no existing chord matches
+                const success = addCustomChord(trimmedInput, notes);
+                if (success) {
+                    onAddChord(trimmedInput);
+                    setInput("");
+                    setError("");
+                    setSuggestions([]);
+                    setPreviewNotes([]);
+                } else {
+                    setError(`A chord with notes "${notes.join(", ")}" already exists in your library.`);
+                    setSuggestions([]);
+                    setPreviewNotes([]);
+                }
             }
         } else if (isValidChord(trimmedInput)) {
             onAddChord(trimmedInput);
@@ -149,8 +170,19 @@ export default function ChordForm({ onAddChord }: ChordFormProps) {
         setPreviewNotes([]);
     }
 
-    // Check if current input is a custom chord format
-    const { isCustomChord } = parseChordInput(input.trim());
+    // Check if current input is a custom chord format and if it matches existing chord
+    const { isCustomChord, notes } = parseChordInput(input.trim());
+    const existingChord = isCustomChord ? findChordByNotes(notes) : null;
+    
+    const getButtonText = () => {
+        if (isCustomChord && existingChord) {
+            return `Add ${existingChord}`;
+        } else if (isCustomChord) {
+            return "Add Custom";
+        } else {
+            return "Add Chord";
+        }
+    };
 
     return (
         <div className="mb-4">
@@ -165,7 +197,7 @@ export default function ChordForm({ onAddChord }: ChordFormProps) {
                     className="p-2 border border-gray-300 rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    {isCustomChord ? "Add Custom" : "Add Chord"}
+                    {getButtonText()}
                 </button>
             </form>
             
@@ -173,8 +205,16 @@ export default function ChordForm({ onAddChord }: ChordFormProps) {
             {previewNotes.length > 0 && !error && (
                 <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
                     <p className="text-green-700 text-sm">
-                        <span className="font-medium">{input.trim()}</span> contains: {previewNotes.join(", ")}
-                        {isCustomChord && <span className="italic text-green-600"> (custom chord)</span>}
+                        {existingChord ? (
+                            <>
+                                <span className="font-medium">{input.trim()}</span> matches existing chord: <span className="font-bold text-green-800">{existingChord}</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="font-medium">{input.trim()}</span> contains: {previewNotes.join(", ")}
+                                {isCustomChord && <span className="italic text-green-600"> (custom chord)</span>}
+                            </>
+                        )}
                     </p>
                 </div>
             )}

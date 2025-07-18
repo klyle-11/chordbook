@@ -17,16 +17,16 @@ export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoar
     const fretPositions = getFretPositions();
     
     return (
-        <div className="mt-8 p-4 bg-gray-100 rounded-lg border border-gray-200">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">
+        <div className="mt-3 p-2 sm:p-3 bg-gray-100 rounded-lg border border-gray-200">
+            <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-800">
                 Fretboard
                 {capoSettings.enabled && capoSettings.fret > 0 && (
-                    <span className="text-sm font-normal text-gray-600 ml-2">
+                    <span className="text-xs sm:text-sm font-normal text-gray-600 ml-2">
                         (Capo on fret {capoSettings.fret})
                     </span>
                 )}
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-1 sm:space-y-2">
                 {strings.map((stringRoot, stringIndex) => {
                     const markers = chordNotes.flatMap((note) => 
                         getFretsForNoteOnString(stringRoot, note)
@@ -41,12 +41,12 @@ export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoar
                     return (
                         <div key={stringIndex} className="flex items-center">
                             {/* String label */}
-                            <div className="w-8 text-sm font-medium text-gray-700">
+                            <div className="w-6 sm:w-8 text-xs sm:text-sm font-medium text-gray-700">
                                 {stringRoot}
                             </div>
                             
                             {/* String line with fret markers */}
-                            <div className="relative flex-1 h-8 mx-2 flex items-center">
+                            <div className="relative flex-1 h-5 sm:h-6 mx-1 sm:mx-2 flex items-center">
                                 {/* String line */}
                                 <div className="absolute left-0 right-0 h-1 bg-gray-600 top-1/2 transform -translate-y-1/2"></div>
                                 
@@ -87,7 +87,7 @@ export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoar
                             </div>
                             
                             {/* Fret numbers for reference */}
-                            <div className="w-20 text-xs text-gray-500">
+                            <div className="w-12 sm:w-20 text-xs text-gray-500">
                                 {markers.length > 0 ? `${markers.length} note${markers.length !== 1 ? 's' : ''}` : 'X'}
                             </div>
                         </div>
@@ -96,10 +96,10 @@ export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoar
             </div>
             
             {/* Fret number labels */}
-            <div className="flex items-center mt-4">
-                <div className="w-8"></div>
-                <div className="relative flex-1 mx-2">
-                    <div className="relative h-6">
+            <div className="flex items-center mt-2 sm:mt-3">
+                <div className="w-6 sm:w-8"></div>
+                <div className="relative flex-1 mx-1 sm:mx-2">
+                    <div className="relative h-3 sm:h-4">
                         {fretPositions.map((position, fret) => (
                             <div 
                                 key={fret}
@@ -120,7 +120,7 @@ export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoar
                         ))}
                     </div>
                 </div>
-                <div className="w-20"></div>
+                <div className="w-12 sm:w-20"></div>
             </div>
         </div>
     );

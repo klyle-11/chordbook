@@ -36,18 +36,20 @@ export default function DraggableChordCard({
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      className={`bg-white rounded-lg p-4 transition-all duration-200 border-2 shadow-sm ${
-        isDragging 
-          ? 'opacity-70 shadow-2xl z-50 border-blue-500 scale-105' 
-          : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
-      }`}
-    >
+    <div className="flex justify-start">
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        data-chord-diagram
+        className={`w-full max-w-7xl bg-white rounded-lg p-3 transition-all duration-200 border-2 shadow-sm ${
+          isDragging 
+            ? 'opacity-70 shadow-2xl z-50 border-blue-500 scale-105' 
+            : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+        }`}
+      >
       {/* Drag handle and chord info */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-1">
         <h3 className="text-lg font-medium text-gray-800">{chord.name}</h3>
         <div className="flex gap-2">
           <button
@@ -73,11 +75,12 @@ export default function DraggableChordCard({
         </div>
       </div>
       
-      <p className="text-sm text-gray-600 mb-3 text-center">
+      <p className="text-sm text-gray-600 mb-2 text-center">
         Notes: {chord.notes.join(", ")}
       </p>
       
       <FretBoard chordNotes={chord.notes} tuning={tuning} capoSettings={capoSettings} />
+      </div>
     </div>
   );
 }

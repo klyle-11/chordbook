@@ -63,7 +63,7 @@ export function EditableText({
         onChange={(e) => setEditValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
-        className={`min-w-[400px] px-3 py-2 bg-transparent border border-blue-500 rounded text-gray-900 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
+        className={`min-w-[300px] max-w-[500px] px-3 py-2 bg-transparent border border-blue-500 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className || 'text-lg'}`}
         placeholder={placeholder}
       />
     );
@@ -72,10 +72,10 @@ export function EditableText({
   return (
     <div
       onClick={handleClick}
-      className={`min-w-[400px] px-3 py-2 bg-transparent border border-transparent rounded text-gray-900 text-lg cursor-pointer hover:bg-gray-100/50 transition-colors min-h-[42px] flex items-center ${className}`}
+      className={`min-w-[300px] max-w-[500px] px-3 py-2 bg-transparent border border-transparent rounded text-gray-900 cursor-pointer hover:bg-gray-100/50 transition-colors min-h-[42px] flex items-center ${className || 'text-lg'}`}
     >
       {value || (
-        <span className="text-gray-400 italic">{placeholder}</span>
+        <span className={`text-gray-400 italic ${className || 'text-lg'}`}>{placeholder}</span>
       )}
     </div>
   );

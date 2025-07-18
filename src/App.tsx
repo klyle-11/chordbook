@@ -14,12 +14,15 @@ import {
 import ChordForm from './components/ChordForm';
 import ProgressionList from './components/ProgressionList';
 import SavedProgressions from './components/SavedProgressions';
+import DebugStorage from './components/DebugStorage';
 import SortableChordGrid from './components/SortableChordGrid';
 import VolumeSlider from './components/VolumeSlider';
 import TuningSelector from './components/TuningSelector';
 import { CapoSelector } from './components/CapoSelector';
 import { EditableText } from './components/EditableText';
 import { ChordIcons } from './components/ChordIcons';
+import { Metronome } from './components/Metronome';
+import { AutoScroll } from './components/AutoScroll';
 
 function App() {
   const [progression, setProgression] = useState<ChordType[]>([]);
@@ -29,15 +32,19 @@ function App() {
   const [currentProgressionName, setCurrentProgressionName] = useState<string>('Untitled');
   const [currentTuning, setCurrentTuning] = useState<Tuning>(DEFAULT_TUNING);
   const [capoSettings, setCapoSettings] = useState<CapoSettings>({ fret: 0, enabled: false });
+  const [currentBpm, setCurrentBpm] = useState<number>(120);
 
   // Load saved progressions on app start
   useEffect(() => {
     const progressions = loadProgressions();
+    console.log('Loaded progressions:', progressions);
     setSavedProgressions(progressions);
     
     const currentId = loadCurrentProgression();
+    console.log('Current progression ID:', currentId);
     if (currentId) {
       const currentProgression = progressions.find(p => p.id === currentId);
+      console.log('Found current progression:', currentProgression);
       if (currentProgression) {
         setCurrentProgressionId(currentId);
         setProgression(currentProgression.chords);
@@ -171,6 +178,12 @@ function App() {
       <VolumeSlider />
       <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Chordbook</h1>
       
+      {/* Metronome and Auto Scroll Controls */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <Metronome onTempoChange={setCurrentBpm} />
+        <AutoScroll bpm={currentBpm} />
+      </div>
+      
       {/* Tuning and Capo Controls */}
       <div className="flex gap-6 mb-6">
         <div>
@@ -190,16 +203,35 @@ function App() {
       
       {/* Progression Name with Chord Icons */}
       <div className="mb-6">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 mb-3">
+          <label className="text-sm font-medium text-gray-700">
+            Chord progression:
+          </label>
+          <button
+            onClick={() => {
+              // Create new progression
+              setProgression([]);
+              setCurrentProgressionName('New Progression');
+            }}
+            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
+            title="Create new chord progression"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex items-center gap-6">
           <div className="min-w-0">
             <EditableText 
               value={currentProgressionName}
               onChange={setCurrentProgressionName}
               placeholder="Click to edit progression name..."
+              className="text-3xl font-bold text-gray-800"
             />
           </div>
           {progression.length > 0 && (
-            <ChordIcons chords={progression} className="flex-shrink-0" />
+            <ChordIcons chords={progression} tuning={currentTuning} className="flex-shrink-0" />
           )}
         </div>
       </div>
@@ -222,7 +254,6 @@ function App() {
       
       {progression.length > 0 && (
         <div className="mt-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">Chords</h2>
           <SortableChordGrid
             progression={progression}
             tuning={currentTuning}
@@ -249,6 +280,8 @@ function App() {
         onDeleteProgression={deleteProgression}
         onNewProgression={newProgression}
       />
+      
+      <DebugStorage />
     </div>
   )
 }
