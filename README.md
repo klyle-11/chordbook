@@ -1,14 +1,31 @@
-# Guitar Chord Map
+# Guitar Chord Progression App
 
-An Electron-based guitar chord mapping application built with React, TypeScript, and Vite. This app provides an interactive way to explore guitar chords, chord progressions, and music theory concepts.
+An Electron-based guitar chord progression application built with React, TypeScript, and Vite. This app provides an interactive way to create, manage, and play chord progressions with visual fretboard representations and audio playback.
 
 ## Features
 
-- **Interactive Chord Visualization**: Visual representation of guitar chords on a fretboard
+- **Interactive Chord Visualization**: 24-fret guitar fretboard with accurate progressive spacing
+- **Audio Playback**: Click any note to hear it played - Web Audio API generates tones
+- **Drag & Drop**: Reorder chords in progressions with smooth animations
+- **Auto-Save**: Progressions automatically save with timestamps
+- **Volume Control**: Floating volume slider with transparency effects
 - **Music Theory Integration**: Powered by @tonaljs/tonal for accurate chord calculations
-- **Modern UI**: Built with Tailwind CSS for a responsive and beautiful interface
+- **Modern UI**: Light theme built with Tailwind CSS v4
 - **Cross-Platform**: Runs as a desktop application on macOS, Windows, and Linux
-- **Hot Module Replacement**: Fast development with Vite's HMR
+
+## Audio Features
+
+- **Note Playback**: Click any fret marker to play the corresponding note
+- **Smooth Audio**: Fade-in/fade-out effects for pleasant listening
+- **Volume Control**: Floating volume slider that follows scroll
+- **Transparency**: Volume control is semi-transparent when not in use
+
+## Visual Features
+
+- **24-Fret Fretboard**: Extended range with mathematically accurate fret spacing
+- **Smart Markers**: Show fret numbers by default, note names on hover
+- **Color Coding**: Green for open strings, orange for fretted notes
+- **Progressive Spacing**: Realistic fret spacing that gets narrower up the neck
 
 ## Development
 
@@ -47,10 +64,12 @@ An Electron-based guitar chord mapping application built with React, TypeScript,
 
 ## Tech Stack
 
-- **Frontend**: React 19, TypeScript, Tailwind CSS
+- **Frontend**: React 19, TypeScript, Tailwind CSS v4
 - **Desktop App**: Electron
 - **Build Tool**: Vite
 - **Music Theory**: @tonaljs/tonal
+- **Drag & Drop**: @dnd-kit (React 19 compatible)
+- **Audio**: Web Audio API
 - **Linting**: ESLint
 
 ## Building for Distribution
