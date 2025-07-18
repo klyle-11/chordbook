@@ -13,10 +13,13 @@ import {
   rectSortingStrategy,
 } from '@dnd-kit/sortable';
 import type { Chord } from '../types/chord';
+import type { Tuning, CapoSettings } from '../lib/tunings';
 import DraggableChordCard from './DraggableChordCard';
 
 interface SortableChordGridProps {
   progression: Chord[];
+  tuning: Tuning;
+  capoSettings: CapoSettings;
   onReorder: (oldIndex: number, newIndex: number) => void;
   onReplace: (index: number) => void;
   onRemove: (index: number) => void;
@@ -24,6 +27,8 @@ interface SortableChordGridProps {
 
 export default function SortableChordGrid({
   progression,
+  tuning,
+  capoSettings,
   onReorder,
   onReplace,
   onRemove,
@@ -63,6 +68,8 @@ export default function SortableChordGrid({
               key={`chord-${index}`}
               chord={chord}
               index={index}
+              tuning={tuning}
+              capoSettings={capoSettings}
               onReplace={onReplace}
               onRemove={onRemove}
             />

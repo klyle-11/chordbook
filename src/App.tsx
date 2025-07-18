@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getNotesForChord } from './lib/chordUtils';
 import type { Chord as ChordType } from './types/chord';
 import type { Progression } from './types/progression';
+import { DEFAULT_TUNING, type Tuning, type CapoSettings } from './lib/tunings';
 import { 
   saveProgressions, 
   loadProgressions, 
@@ -15,6 +16,10 @@ import ProgressionList from './components/ProgressionList';
 import SavedProgressions from './components/SavedProgressions';
 import SortableChordGrid from './components/SortableChordGrid';
 import VolumeSlider from './components/VolumeSlider';
+import TuningSelector from './components/TuningSelector';
+import { CapoSelector } from './components/CapoSelector';
+import { EditableText } from './components/EditableText';
+import { ChordIcons } from './components/ChordIcons';
 
 function App() {
   const [progression, setProgression] = useState<ChordType[]>([]);
@@ -22,6 +27,8 @@ function App() {
   const [savedProgressions, setSavedProgressions] = useState<Progression[]>([]);
   const [currentProgressionId, setCurrentProgressionId] = useState<string | null>(null);
   const [currentProgressionName, setCurrentProgressionName] = useState<string>('Untitled');
+  const [currentTuning, setCurrentTuning] = useState<Tuning>(DEFAULT_TUNING);
+  const [capoSettings, setCapoSettings] = useState<CapoSettings>({ fret: 0, enabled: false });
 
   // Load saved progressions on app start
   useEffect(() => {
@@ -118,6 +125,8 @@ function App() {
 
   function replaceChord(index: number) {
     setReplacingIndex(index);
+    // Scroll to the top where the chord input form is located
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function reorderChords(oldIndex: number, newIndex: number) {
@@ -173,18 +182,46 @@ function App() {
       <VolumeSlider />
       <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Chordbook</h1>
       
+      {/* Tuning and Capo Controls */}
+      <div className="flex gap-6 mb-6">
+        <div>
+          <label className="block text-sm font-medium mb-2 text-gray-700">
+            Guitar Tuning:
+          </label>
+          <TuningSelector 
+            currentTuning={currentTuning}
+            onTuningChange={setCurrentTuning}
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium mb-2 text-gray-700">
+            Capo:
+          </label>
+          <CapoSelector
+            capoSettings={capoSettings}
+            onCapoChange={setCapoSettings}
+          />
+        </div>
+      </div>
+      
+      {/* Progression Name with Chord Icons */}
       <div className="mb-6">
-        <label htmlFor="progression-name" className="block text-sm font-medium mb-2 text-gray-700">
+        <label className="block text-sm font-medium mb-2 text-gray-700">
           Progression Name:
         </label>
-        <input
-          id="progression-name"
-          type="text"
-          value={currentProgressionName}
-          onChange={(e) => setCurrentProgressionName(e.target.value)}
-          className="max-w-[25%] px-3 py-2 bg-white border-0 rounded text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-          placeholder="Enter progression name..."
-        />
+        <div className="flex items-center gap-4">
+          <div className="min-w-0">
+            <EditableText 
+              value={currentProgressionName}
+              onChange={setCurrentProgressionName}
+              placeholder="Click to edit progression name..."
+            />
+          </div>
+          {progression.length > 0 && (
+            <ChordIcons chords={progression} className="flex-shrink-0" />
+          )}
+        </div>
       </div>
       
       <ChordForm onAddChord={addChord} />
@@ -205,9 +242,11 @@ function App() {
       
       {progression.length > 0 && (
         <div className="mt-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">Chord Progression Diagrams</h2>
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Chords</h2>
           <SortableChordGrid
             progression={progression}
+            tuning={currentTuning}
+            capoSettings={capoSettings}
             onReorder={reorderChords}
             onReplace={replaceChord}
             onRemove={removeChord}

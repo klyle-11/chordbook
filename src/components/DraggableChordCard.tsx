@@ -1,11 +1,14 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Chord } from '../types/chord';
+import type { Tuning, CapoSettings } from '../lib/tunings';
 import FretBoard from './Fretboard';
 
 interface DraggableChordCardProps {
   chord: Chord;
   index: number;
+  tuning: Tuning;
+  capoSettings: CapoSettings;
   onReplace: (index: number) => void;
   onRemove: (index: number) => void;
 }
@@ -13,6 +16,8 @@ interface DraggableChordCardProps {
 export default function DraggableChordCard({ 
   chord, 
   index, 
+  tuning,
+  capoSettings,
   onReplace, 
   onRemove 
 }: DraggableChordCardProps) {
@@ -72,7 +77,7 @@ export default function DraggableChordCard({
         Notes: {chord.notes.join(", ")}
       </p>
       
-      <FretBoard chordNotes={chord.notes} />
+      <FretBoard chordNotes={chord.notes} tuning={tuning} capoSettings={capoSettings} />
     </div>
   );
 }
