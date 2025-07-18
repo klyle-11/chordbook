@@ -16,7 +16,7 @@ export default function TuningSelector({ currentTuning, onTuningChange }: Tuning
   return (
     <div className="flex items-center gap-3 bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-200">
       <label htmlFor="tuning-select" className="text-sm font-medium text-gray-700 whitespace-nowrap">
-        Guitar Tuning:
+        Tuning/instrument:
       </label>
       <select
         id="tuning-select"

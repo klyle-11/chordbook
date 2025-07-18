@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Progression } from '../types/progression';
 import { formatProgressionDateTime } from '../lib/progressionStorage';
 
@@ -16,6 +17,17 @@ export default function SavedProgressions({
   onDeleteProgression,
   onNewProgression 
 }: SavedProgressionsProps) {
+  const [showAll, setShowAll] = useState(false);
+  
+  // Sort progressions by updated date (latest first)
+  const sortedProgressions = [...progressions].sort((a, b) => 
+    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+  
+  // Show only 5 most recent unless expanded
+  const displayedProgressions = showAll ? sortedProgressions : sortedProgressions.slice(0, 5);
+  const hasMore = sortedProgressions.length > 5;
+
   if (progressions.length === 0) {
     return (
       <div className="mt-8">
@@ -36,7 +48,12 @@ export default function SavedProgressions({
   return (
     <div className="mt-8">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold text-gray-800">Saved Progressions</h3>
+        <div>
+          <h3 className="text-xl font-semibold text-gray-800">Saved Progressions</h3>
+          <p className="text-sm text-gray-600">
+            {showAll ? `Showing all ${sortedProgressions.length}` : `Showing ${Math.min(5, sortedProgressions.length)} of ${sortedProgressions.length}`} progressions
+          </p>
+        </div>
         <button
           onClick={onNewProgression}
           className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
@@ -46,7 +63,7 @@ export default function SavedProgressions({
       </div>
       
       <div className="space-y-2">
-        {progressions.map((progression) => (
+        {displayedProgressions.map((progression) => (
           <div
             key={progression.id}
             className={`flex items-center justify-between p-3 rounded border bg-white shadow-sm ${
@@ -75,8 +92,13 @@ export default function SavedProgressions({
                 </button>
               )}
               <button
-                onClick={() => onDeleteProgression(progression.id)}
+                onClick={() => {
+                  if (window.confirm(`Are you sure you want to delete "${progression.name}"? This action cannot be undone.`)) {
+                    onDeleteProgression(progression.id);
+                  }
+                }}
                 className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                title="Delete progression"
               >
                 ×
               </button>
@@ -84,6 +106,18 @@ export default function SavedProgressions({
           </div>
         ))}
       </div>
+      
+      {/* Show/Hide button for full library */}
+      {hasMore && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+          >
+            {showAll ? 'Show Recent Only' : `Show All ${sortedProgressions.length} Progressions`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -84,18 +84,7 @@ function App() {
   // Auto-save current progression whenever it changes
   useEffect(() => {
     const saveProgression = () => {
-      if (progression.length > 0 || currentProgressionId) {
-        saveCurrentProgressionToStorage();
-      }
-    };
-    
-    saveProgression();
-  }, [progression, currentProgressionId, currentProgressionName, saveCurrentProgressionToStorage]);
-
-  // Auto-save current progression whenever it changes
-  useEffect(() => {
-    const saveProgression = () => {
-      if (progression.length > 0 || currentProgressionId) {
+      if (progression.length > 0) {
         saveCurrentProgressionToStorage();
       }
     };
@@ -185,9 +174,6 @@ function App() {
       {/* Tuning and Capo Controls */}
       <div className="flex gap-6 mb-6">
         <div>
-          <label className="block text-sm font-medium mb-2 text-gray-700">
-            Guitar Tuning:
-          </label>
           <TuningSelector 
             currentTuning={currentTuning}
             onTuningChange={setCurrentTuning}
@@ -195,9 +181,6 @@ function App() {
         </div>
         
         <div>
-          <label className="block text-sm font-medium mb-2 text-gray-700">
-            Capo:
-          </label>
           <CapoSelector
             capoSettings={capoSettings}
             onCapoChange={setCapoSettings}
@@ -207,9 +190,6 @@ function App() {
       
       {/* Progression Name with Chord Icons */}
       <div className="mb-6">
-        <label className="block text-sm font-medium mb-2 text-gray-700">
-          Progression Name:
-        </label>
         <div className="flex items-center gap-4">
           <div className="min-w-0">
             <EditableText 
@@ -254,11 +234,14 @@ function App() {
         </div>
       )}
       
-      <ProgressionList 
-        progression={progression} 
-        onRemove={removeChord} 
-        onReplace={replaceChord}
-      />
+      {progression.length > 0 && (
+        <ProgressionList 
+          progression={progression} 
+          onRemove={removeChord} 
+          onReplace={replaceChord}
+        />
+      )}
+      
       <SavedProgressions
         progressions={savedProgressions}
         currentProgressionId={currentProgressionId}
