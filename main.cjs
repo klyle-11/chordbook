@@ -4,6 +4,11 @@ const fs = require('fs').promises;
 const os = require('os');
 const isDev = process.env.NODE_ENV === 'development';
 
+// Enable V8 flags for better stability
+app.commandLine.appendSwitch('--js-flags', '--expose-gc --max-old-space-size=4096');
+app.commandLine.appendSwitch('--disable-dev-shm-usage');
+app.commandLine.appendSwitch('--no-sandbox');
+
 // Storage directory for song files
 const getStorageDirectory = () => {
   const userDataPath = app.getPath('userData');
@@ -25,59 +30,121 @@ const ensureStorageDirectory = async () => {
 
 let mainWindow;
 
-// IPC Handlers for file operations
+// File operation queue to prevent EMFILE errors
+const fileOperationQueue = [];
+let isProcessingQueue = false;
+const MAX_CONCURRENT_FILES = 3; // Reduced from 5 for more stability
+let operationCount = 0;
+
+// Force garbage collection periodically
+const forceGC = () => {
+  if (global.gc) {
+    try {
+      global.gc();
+      console.log('🧹 Forced garbage collection');
+    } catch (err) {
+      console.warn('GC not available:', err.message);
+    }
+  }
+};
+
+const processFileQueue = async () => {
+  if (isProcessingQueue || fileOperationQueue.length === 0) return;
+  
+  isProcessingQueue = true;
+  
+  while (fileOperationQueue.length > 0) {
+    const batch = fileOperationQueue.splice(0, MAX_CONCURRENT_FILES);
+    await Promise.allSettled(batch.map(operation => operation()));
+    
+    // Trigger GC every 10 operations
+    operationCount += batch.length;
+    if (operationCount >= 10) {
+      forceGC();
+      operationCount = 0;
+    }
+    
+    // Longer delay between batches for stability
+    if (fileOperationQueue.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
+  
+  isProcessingQueue = false;
+};
+
+const queueFileOperation = (operation) => {
+  return new Promise((resolve, reject) => {
+    fileOperationQueue.push(async () => {
+      try {
+        const result = await operation();
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+    });
+    
+    // Start processing queue if not already processing
+    processFileQueue().catch(console.error);
+  });
+};
+
+// Retry with exponential backoff for EMFILE errors
+const retryWithBackoff = async (operation, maxRetries = 3) => {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error.code === 'EMFILE' && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 100; // 100ms, 200ms, 400ms
+        console.warn(`EMFILE error, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        forceGC(); // Try to free up resources
+        continue;
+      }
+      throw error;
+    }
+  }
+};
+
+// IPC Handlers for file operations with concurrency control
 ipcMain.handle('file:save', async (event, filePath, content) => {
-  try {
+  return queueFileOperation(() => retryWithBackoff(async () => {
     await ensureStorageDirectory();
     await fs.writeFile(filePath, content, 'utf8');
     return true;
-  } catch (error) {
-    console.error('Error saving file:', error);
-    return false;
-  }
+  }));
 });
 
 ipcMain.handle('file:read', async (event, filePath) => {
-  try {
+  return queueFileOperation(() => retryWithBackoff(async () => {
     const content = await fs.readFile(filePath, 'utf8');
     return content;
-  } catch (error) {
-    console.error('Error reading file:', error);
-    return null;
-  }
+  }));
 });
 
 ipcMain.handle('file:delete', async (event, filePath) => {
-  try {
+  return queueFileOperation(() => retryWithBackoff(async () => {
     await fs.unlink(filePath);
     return true;
-  } catch (error) {
-    console.error('Error deleting file:', error);
-    return false;
-  }
+  }));
 });
 
 ipcMain.handle('file:list', async (event, dirPath) => {
-  try {
+  return queueFileOperation(() => retryWithBackoff(async () => {
     const files = await fs.readdir(dirPath);
     return files;
-  } catch (error) {
-    console.error('Error listing files:', error);
-    return null;
-  }
+  }));
 });
 
 ipcMain.handle('file:stats', async (event, filePath) => {
-  try {
+  return queueFileOperation(() => retryWithBackoff(async () => {
     const stats = await fs.stat(filePath);
     return {
       size: stats.size,
       mtime: stats.mtime.toISOString()
     };
-  } catch (error) {
-    console.error('Error getting file stats:', error);
-    return null;
-  }
+  }));
 });
 
 ipcMain.handle('app:getStorageDir', async () => {
@@ -104,7 +171,7 @@ function createWindow() {
 
   // Load the app
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5174');  // Updated to the correct port Vite is using
+    mainWindow.loadURL('http://localhost:5173');  // Updated to match Vite's port
     // Open DevTools in development
     mainWindow.webContents.openDevTools();
   } else {
@@ -135,14 +202,37 @@ app.whenReady().then(() => {
 
   // Set up menu
   createMenu();
+
+  // Clean up resources periodically
+  const cleanupInterval = setInterval(() => {
+    if (operationCount > 0) {
+      console.log(`📊 Processed ${operationCount} file operations, queue length: ${fileOperationQueue.length}`);
+    }
+    forceGC();
+  }, 30000); // Every 30 seconds
+
+  mainWindow.on('closed', () => {
+    clearInterval(cleanupInterval);
+    forceGC();
+    mainWindow = null;
+  });
 });
 
 // Quit when all windows are closed
 app.on('window-all-closed', () => {
+  // Force final cleanup
+  forceGC();
+  
   // On macOS, keep app running even when all windows are closed
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// Clean up on app quit
+app.on('before-quit', () => {
+  console.log('🧹 App quitting, forcing final cleanup...');
+  forceGC();
 });
 
 // Security: Prevent new window creation

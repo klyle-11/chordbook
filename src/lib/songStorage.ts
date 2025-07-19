@@ -9,8 +9,11 @@ const MIGRATION_FLAG_KEY = 'chordbook-songs-migrated';
 const BACKUP_STORAGE_KEY = 'chordbook-songs-backup';
 const AUTO_SAVE_INTERVAL = 5000; // 5 seconds
 
-// Auto-save timer
+// Auto-save timer and failure tracking
 let autoSaveTimer: NodeJS.Timeout | null = null;
+let consecutiveFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = 3;
+let autoSaveDisabled = false;
 
 export function generateSongId(): string {
   return 'song-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -79,6 +82,13 @@ export function loadSongs(): Song[] {
 
 export function saveSongs(songs: Song[]): void {
   console.log('🔧 saveSongs called with:', songs.length, 'songs');
+  
+  // Check if auto-save is disabled due to previous failures
+  if (autoSaveDisabled) {
+    console.warn('🚫 Auto-save disabled due to repeated failures');
+    return;
+  }
+
   try {
     // Create backup before saving
     const currentData = localStorage.getItem(SONGS_STORAGE_KEY);
@@ -103,14 +113,34 @@ export function saveSongs(songs: Song[]): void {
       }
     });
     
-    // Also save to individual JSON files (async, don't block)
-    saveSongsToFiles(songs).catch(error => {
-      console.warn('Failed to save songs to files:', error);
-    });
+    // Only save to files if we haven't had too many failures
+    if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
+      // Save to individual JSON files (async, don't block)
+      saveSongsToFiles(songs).catch(error => {
+        consecutiveFailures++;
+        console.warn(`Failed to save songs to files (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
+        
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          console.error('🚫 Disabling file saves due to repeated failures');
+          autoSaveDisabled = true;
+        }
+      });
+    } else {
+      console.log('🚫 Skipping file save due to previous failures');
+    }
     
+    // Reset failure counter on successful localStorage save
+    consecutiveFailures = 0;
     console.log(`🔧 Successfully saved ${songs.length} songs`);
   } catch (error) {
-    console.error('🔧 Critical error saving songs:', error);
+    consecutiveFailures++;
+    console.error(`🔧 Critical error saving songs (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
+    
+    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      console.error('🚫 Disabling auto-save due to repeated failures');
+      autoSaveDisabled = true;
+    }
+    
     // Try to recover from backup if available
     try {
       const backup = localStorage.getItem(BACKUP_STORAGE_KEY);
@@ -143,6 +173,22 @@ export function forceSave(songs: Song[]): void {
     autoSaveTimer = null;
   }
   saveSongs(songs);
+}
+
+// Re-enable auto-save after failures
+export function reenableAutoSave(): void {
+  console.log('🔄 Re-enabling auto-save');
+  autoSaveDisabled = false;
+  consecutiveFailures = 0;
+}
+
+// Get auto-save status
+export function getAutoSaveStatus(): { disabled: boolean; failures: number; maxFailures: number } {
+  return {
+    disabled: autoSaveDisabled,
+    failures: consecutiveFailures,
+    maxFailures: MAX_CONSECUTIVE_FAILURES
+  };
 }
 
 export function createNewSong(name: string = 'New Song'): Song {

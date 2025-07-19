@@ -205,7 +205,7 @@ const loadSongFromFileElectron = async (songId: string): Promise<Song | null> =>
   }
 };
 
-// Cleanup old song files
+// Cleanup old song files with sequential processing
 const cleanupOldFiles = async (): Promise<void> => {
   if (!STORAGE_CONFIG.autoCleanupEnabled) return;
 
@@ -217,28 +217,42 @@ const cleanupOldFiles = async (): Promise<void> => {
       const files = await window.electronAPI.listFiles(storageDir);
       if (!files || files.length <= STORAGE_CONFIG.maxSongsPerDevice) return;
 
-      // Get file stats and sort by modification date
-      const fileStats = await Promise.all(
-        files.map(async (file: string) => {
+      // Get file stats sequentially to avoid EMFILE errors
+      const fileStats = [];
+      for (const file of files) {
+        try {
           const stats = window.electronAPI ? await window.electronAPI.getFileStats(`${storageDir}/${file}`) : null;
-          return { file, stats };
-        })
-      );
+          if (stats !== null) {
+            fileStats.push({ file, stats });
+          }
+          
+          // Small delay between stat calls
+          await new Promise(resolve => setTimeout(resolve, 2));
+        } catch (error) {
+          logger.error(`Error getting stats for ${file}:`, error);
+        }
+      }
 
-      const sortedFiles = fileStats
-        .filter(({ stats }) => stats !== null) // Filter out files we couldn't stat
-        .sort((a, b) => {
-          if (!a.stats || !b.stats) return 0;
-          return new Date(a.stats.mtime).getTime() - new Date(b.stats.mtime).getTime();
-        }); // Oldest first
+      const sortedFiles = fileStats.sort((a, b) => {
+        if (!a.stats || !b.stats) return 0;
+        return new Date(a.stats.mtime).getTime() - new Date(b.stats.mtime).getTime();
+      }); // Oldest first
 
       const filesToDelete = sortedFiles.slice(0, sortedFiles.length - STORAGE_CONFIG.maxSongsPerDevice);
       
+      // Delete files sequentially to avoid EMFILE errors
       for (const { file } of filesToDelete) {
         if (window.electronAPI) {
-          const success = await window.electronAPI.deleteFile(`${storageDir}/${file}`);
-          if (success) {
-            logger.debug(`Cleaned up old song file: ${file}`);
+          try {
+            const success = await window.electronAPI.deleteFile(`${storageDir}/${file}`);
+            if (success) {
+              logger.debug(`Cleaned up old song file: ${file}`);
+            }
+            
+            // Small delay between deletions
+            await new Promise(resolve => setTimeout(resolve, 5));
+          } catch (error) {
+            logger.error(`Error deleting file ${file}:`, error);
           }
         }
       }
@@ -270,23 +284,36 @@ const cleanupOldFiles = async (): Promise<void> => {
   }
 };
 
-// Save all songs to individual files
+// Save all songs to individual files with sequential processing to prevent EMFILE errors
 export const saveSongsToFiles = async (songs: Song[]): Promise<void> => {
   try {
     // Also save to localStorage for compatibility
     saveToLocalStorage(songs);
 
-    // Save each song to its own file
-    const savePromises = songs.map(song => {
-      if (isElectron()) {
-        return saveSongToFileElectron(song);
-      } else {
-        return saveSongToFileWeb(song);
+    // Process songs sequentially to prevent file descriptor exhaustion
+    let successCount = 0;
+    
+    for (const song of songs) {
+      try {
+        let result = false;
+        if (isElectron()) {
+          result = await saveSongToFileElectron(song);
+        } else {
+          result = await saveSongToFileWeb(song);
+        }
+        
+        if (result) {
+          successCount++;
+        }
+        
+        // Small delay between saves to prevent overwhelming the system
+        if (songs.length > 10) {
+          await new Promise(resolve => setTimeout(resolve, 5));
+        }
+      } catch (error) {
+        logger.error(`Error saving individual song ${song.name}:`, error);
       }
-    });
-
-    const results = await Promise.allSettled(savePromises);
-    const successCount = results.filter(r => r.status === 'fulfilled' && r.value === true).length;
+    }
     
     logger.infoThrottled('batch-save', `Saved ${successCount}/${songs.length} songs to individual files`);
 
@@ -382,7 +409,7 @@ export const deleteSongFile = async (song: Song): Promise<boolean> => {
   }
 };
 
-// Get storage statistics
+// Get storage statistics with sequential file processing
 export const getStorageStats = async (): Promise<{
   totalSongs: number;
   totalSizeKB: number;
@@ -403,18 +430,26 @@ export const getStorageStats = async (): Promise<{
       let oldestDate: Date | undefined;
       let newestDate: Date | undefined;
 
+      // Process files sequentially to avoid EMFILE errors
       for (const file of songFiles) {
-        const stats = await window.electronAPI.getFileStats(`${storageDir}/${file}`);
-        if (stats) {
-          totalSize += stats.size;
-          const fileDate = new Date(stats.mtime);
+        try {
+          const stats = await window.electronAPI.getFileStats(`${storageDir}/${file}`);
+          if (stats) {
+            totalSize += stats.size;
+            const fileDate = new Date(stats.mtime);
+            
+            if (!oldestDate || fileDate < oldestDate) {
+              oldestDate = fileDate;
+            }
+            if (!newestDate || fileDate > newestDate) {
+              newestDate = fileDate;
+            }
+          }
           
-          if (!oldestDate || fileDate < oldestDate) {
-            oldestDate = fileDate;
-          }
-          if (!newestDate || fileDate > newestDate) {
-            newestDate = fileDate;
-          }
+          // Small delay between stat calls
+          await new Promise(resolve => setTimeout(resolve, 2));
+        } catch (error) {
+          logger.error(`Error getting stats for ${file}:`, error);
         }
       }
 

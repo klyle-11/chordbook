@@ -40,6 +40,9 @@ import ErrorRecoveryPanel from './components/ErrorRecoveryPanel';
 import ErrorTestComponent from './components/ErrorTestComponent';
 import StorageTest from './components/StorageTest';
 import { errorMonitor } from './services/ErrorMonitoring';
+import { capoRateLimiter } from './lib/capoRateLimit';
+import CapoErrorBoundary from './components/CapoErrorBoundary';
+import AutoSaveStatus from './components/AutoSaveStatus';
 
 function App() {
   // Progression state (existing)
@@ -250,20 +253,28 @@ function App() {
   }
 
   function handleCapoChange(newCapoSettings: CapoSettings) {
+    console.log('🎸 Capo change requested:', newCapoSettings);
+    
+    // Update UI state immediately for responsiveness
     setCapoSettings(newCapoSettings);
     
-    // Update the current song's capo settings
+    // Update the current song's capo settings with rate limiting
     if (currentSongId) {
-      setSongs(prevSongs => {
-        const updatedSongs = prevSongs.map(song => 
-          song.id === currentSongId 
-            ? { ...song, capoSettings: newCapoSettings, updatedAt: new Date() }
-            : song
-        );
-        // Force immediate save for capo changes
-        forceSave(updatedSongs);
-        return updatedSongs;
-      });
+      const saveOperation = () => {
+        setSongs(prevSongs => {
+          const updatedSongs = prevSongs.map(song => 
+            song.id === currentSongId 
+              ? { ...song, capoSettings: newCapoSettings, updatedAt: new Date() }
+              : song
+          );
+          console.log('🎸 Saving capo changes to storage...');
+          forceSave(updatedSongs);
+          return updatedSongs;
+        });
+      };
+
+      // Use rate limiter to prevent overwhelming the file system
+      capoRateLimiter.debouncedSave(saveOperation);
     }
   }
 
@@ -614,26 +625,42 @@ function App() {
           <div>
             {/* Song Manager */}
             <div className="mb-8">
-              <ComponentErrorBoundary 
-                componentName="SongManager" 
-                fallbackHeight="200px"
-                onError={(error, componentName) => errorMonitor.logComponentError(componentName, error)}
+              <CapoErrorBoundary
+                onError={(error) => {
+                  console.error('🚨 Capo error in SongManager:', error);
+                  errorMonitor.logComponentError('SongManager-Capo', error);
+                }}
+                onRetry={() => {
+                  console.log('🔄 Retrying capo operation...');
+                  // Force a re-render by updating a dummy state
+                  setCapoSettings(prev => ({ ...prev }));
+                }}
+                onBypass={() => {
+                  console.log('⚠️ Bypassing capo save operations');
+                  capoRateLimiter.clear();
+                }}
               >
-                <SongManager 
-                  songs={songs}
-                  currentSong={songs.find(song => song.id === currentSongId) || null}
-                  onSelectSong={handleSelectSong}
-                  onCreateSong={handleCreateSong}
-                  onRenameSong={handleRenameSong}
-                  onUpdateSongBpm={handleSongBpmChange}
-                  onDeleteSong={handleDeleteSong}
-                  onBackToOverview={handleBackToOverview}
-                  currentTuning={currentTuning}
-                  capoSettings={capoSettings}
-                  onTuningChange={handleTuningChange}
-                  onCapoChange={handleCapoChange}
-                />
-              </ComponentErrorBoundary>
+                <ComponentErrorBoundary 
+                  componentName="SongManager" 
+                  fallbackHeight="200px"
+                  onError={(error, componentName) => errorMonitor.logComponentError(componentName, error)}
+                >
+                  <SongManager 
+                    songs={songs}
+                    currentSong={songs.find(song => song.id === currentSongId) || null}
+                    onSelectSong={handleSelectSong}
+                    onCreateSong={handleCreateSong}
+                    onRenameSong={handleRenameSong}
+                    onUpdateSongBpm={handleSongBpmChange}
+                    onDeleteSong={handleDeleteSong}
+                    onBackToOverview={handleBackToOverview}
+                    currentTuning={currentTuning}
+                    capoSettings={capoSettings}
+                    onTuningChange={handleTuningChange}
+                    onCapoChange={handleCapoChange}
+                  />
+                </ComponentErrorBoundary>
+              </CapoErrorBoundary>
             </div>
 
             {/* Song Progressions */}
@@ -688,6 +715,9 @@ function App() {
         
         {/* Storage Test Component (Development Only) */}
         <StorageTest />
+        
+        {/* Auto-save Status */}
+        <AutoSaveStatus />
       </div>
     </ErrorBoundary>
   )
