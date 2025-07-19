@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron": "electron .",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5174 && NODE_ENV=development electron .\"",
     "electron-pack": "npm run build && electron-builder",
     "electron-build": "npm run build && electron-builder --publish=never",
     "electron-dist": "npm run build && electron-builder --publish=onTagOrDraft"

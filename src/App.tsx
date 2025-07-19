@@ -21,8 +21,7 @@ import TuningSelector from './components/TuningSelector';
 import { CapoSelector } from './components/CapoSelector';
 import { EditableText } from './components/EditableText';
 import { ChordIcons } from './components/ChordIcons';
-import { Metronome } from './components/Metronome';
-import { AutoScroll } from './components/AutoScroll';
+import { IntegratedMetronome } from './components/IntegratedMetronome';
 
 function App() {
   const [progression, setProgression] = useState<ChordType[]>([]);
@@ -178,10 +177,9 @@ function App() {
       <VolumeSlider />
       <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Chordbook</h1>
       
-      {/* Metronome and Auto Scroll Controls */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <Metronome onTempoChange={setCurrentBpm} />
-        <AutoScroll bpm={currentBpm} />
+      {/* Integrated Metronome and Auto Scroll Controls */}
+      <div className="mb-6">
+        <IntegratedMetronome onTempoChange={setCurrentBpm} />
       </div>
       
       {/* Tuning and Capo Controls */}
@@ -208,11 +206,7 @@ function App() {
             Chord progression:
           </label>
           <button
-            onClick={() => {
-              // Create new progression
-              setProgression([]);
-              setCurrentProgressionName('New Progression');
-            }}
+            onClick={newProgression}
             className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
             title="Create new chord progression"
           >
@@ -270,6 +264,7 @@ function App() {
           progression={progression} 
           onRemove={removeChord} 
           onReplace={replaceChord}
+          onReorder={reorderChords}
         />
       )}
       

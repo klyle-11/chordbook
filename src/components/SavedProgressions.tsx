@@ -30,7 +30,7 @@ export default function SavedProgressions({
 
   if (progressions.length === 0) {
     return (
-      <div className="mt-8">
+      <div className="mt-8 max-w-[50%] mx-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold text-gray-800">Saved chord progressions</h3>
           <button
@@ -46,7 +46,7 @@ export default function SavedProgressions({
   }
 
   return (
-    <div className="mt-8">
+    <div className="mt-8 max-w-[50%] mx-auto">
       <div className="flex justify-between items-center mb-4">
         <div>
           <h3 className="text-xl font-semibold text-gray-800">Saved chord progressions</h3>
@@ -72,17 +72,17 @@ export default function SavedProgressions({
                 : 'border-gray-200 hover:border-gray-300'
             }`}
           >
-            <div className="flex-1">
-              <h4 className="font-medium text-gray-800">{progression.name}</h4>
+            <div className="flex-1 min-w-0 mr-4">
+              <h4 className="font-medium text-gray-800 truncate">{progression.name}</h4>
               <p className="text-sm text-gray-600">
                 {formatProgressionDateTime(progression.updatedAt)} • {progression.chords.length} chords
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-1 truncate">
                 {progression.chords.map(chord => chord.name).join(' - ')}
               </p>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-shrink-0">
               {progression.id !== currentProgressionId && (
                 <button
                   onClick={() => onLoadProgression(progression.id)}
