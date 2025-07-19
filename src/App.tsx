@@ -12,22 +12,34 @@ import {
   loadCurrentProgression
 } from './lib/progressionStorage';
 import { 
-  saveSongs, 
-  loadSongs, 
   saveCurrentSong, 
   loadCurrentSong,
   generateSongId,
   updateProgressionBpm,
-  generateProgressionId
+  generateProgressionId,
+  scheduleAutoSave,
+  forceSave,
+  loadSongsWithRecovery,
+  cleanupOldSongFiles,
+  getSongsByLastOpened,
+  getRecentlyOpenedSongs
 } from './lib/songStorage';
+import { deleteSongFile } from './lib/fileStorage';
 
 import ProgressionList from './components/ProgressionList';
-import SavedProgressions from './components/SavedProgressions';
 import DebugStorage from './components/DebugStorage';
+import BackupManager from './components/BackupManager';
 import SortableChordGrid from './components/SortableChordGrid';
 import VolumeSlider from './components/VolumeSlider';
 import SongManager from './components/SongManager';
 import SongProgressions from './components/SongProgressions';
+import HomePage from './components/HomePage';
+import ErrorBoundary from './components/ErrorBoundary';
+import ComponentErrorBoundary from './components/ComponentErrorBoundary';
+import ErrorRecoveryPanel from './components/ErrorRecoveryPanel';
+import ErrorTestComponent from './components/ErrorTestComponent';
+import StorageTest from './components/StorageTest';
+import { errorMonitor } from './services/ErrorMonitoring';
 
 function App() {
   // Progression state (existing)
@@ -67,14 +79,20 @@ function App() {
 
   // Load saved songs on app start
   useEffect(() => {
-    const loadedSongs = loadSongs();
-    console.log('Loaded songs:', loadedSongs);
+    console.log('🔧 Loading songs on app start...');
+    const loadedSongs = loadSongsWithRecovery();
+    console.log('🔧 Loaded songs with recovery:', loadedSongs);
     setSongs(loadedSongs);
     
     const currentId = loadCurrentSong();
-    console.log('Current song ID:', currentId);
+    console.log('🔧 Current song ID:', currentId);
     if (currentId) {
       setCurrentSongId(currentId);
+    }
+    
+    // Cleanup old song files periodically
+    if (loadedSongs.length > 0) {
+      cleanupOldSongFiles(loadedSongs);
     }
   }, []);
 
@@ -143,52 +161,57 @@ function App() {
     });
   }
 
-  function loadProgression(progressionId: string) {
-    // Save current progression before switching if it has changes
-    if (progression.length > 0 && currentProgressionId !== progressionId) {
-      saveCurrentProgressionToStorage();
+  // Auto-save songs whenever they change
+  useEffect(() => {
+    console.log('🔧 Auto-save effect triggered, songs.length:', songs.length);
+    if (songs.length > 0) {
+      console.log('🔧 Scheduling auto-save for songs:', songs.map(s => s.name));
+      scheduleAutoSave(songs);
     }
+  }, [songs]);
 
-    const targetProgression = savedProgressions.find(p => p.id === progressionId);
-    if (targetProgression) {
-      setCurrentProgressionId(progressionId);
-      setProgression(targetProgression.chords);
-      setCurrentProgressionName(targetProgression.name);
-      setReplacingIndex(null);
-      saveCurrentProgression(progressionId);
-    }
-  }
+  // Save immediately on page unload or visibility change
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (songs.length > 0) {
+        forceSave(songs);
+      }
+    };
 
-  function deleteProgression(progressionId: string) {
-    const updatedProgressions = savedProgressions.filter(p => p.id !== progressionId);
-    setSavedProgressions(updatedProgressions);
-    saveProgressions(updatedProgressions);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && songs.length > 0) {
+        forceSave(songs);
+      }
+    };
 
-    if (currentProgressionId === progressionId) {
-      // If deleting current progression, start fresh
-      newProgression();
-    }
-  }
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
-  function newProgression() {
-    // Save current progression before creating new one if it has changes
-    if (progression.length > 0) {
-      saveCurrentProgressionToStorage();
-    }
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [songs]);
 
-    setCurrentProgressionId(null);
-    setProgression([]);
-    setCurrentProgressionName('Untitled');
-    setReplacingIndex(null);
-  }
+  // Periodic cleanup of old song files
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      if (songs.length > 0) {
+        cleanupOldSongFiles(songs);
+      }
+    }, 60000); // Every minute
+
+    return () => clearInterval(cleanupInterval);
+  }, [songs]);
 
   // BPM handlers for songs and progressions
   function handleSongBpmChange(songId: string, newBpm: number) {
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => 
-        song.id === songId ? { ...song, bpm: newBpm } : song
+        song.id === songId ? { ...song, bpm: newBpm, updatedAt: new Date() } : song
       );
-      saveSongs(updatedSongs);
+      // Force immediate save for BPM changes
+      forceSave(updatedSongs);
       return updatedSongs;
     });
     
@@ -202,25 +225,68 @@ function App() {
     setCurrentSongId(song.id);
     saveCurrentSong(song.id);
     
-    // Update BPM based on the selected song
+    // Update BPM, tuning, and capo based on the selected song
     setCurrentBpm(song.bpm || 120);
+    setCurrentTuning(song.tuning || DEFAULT_TUNING);
+    setCapoSettings(song.capoSettings || { fret: 0, enabled: false });
+  }
+
+  function handleTuningChange(newTuning: Tuning) {
+    setCurrentTuning(newTuning);
+    
+    // Update the current song's tuning
+    if (currentSongId) {
+      setSongs(prevSongs => {
+        const updatedSongs = prevSongs.map(song => 
+          song.id === currentSongId 
+            ? { ...song, tuning: newTuning, updatedAt: new Date() }
+            : song
+        );
+        // Force immediate save for tuning changes
+        forceSave(updatedSongs);
+        return updatedSongs;
+      });
+    }
+  }
+
+  function handleCapoChange(newCapoSettings: CapoSettings) {
+    setCapoSettings(newCapoSettings);
+    
+    // Update the current song's capo settings
+    if (currentSongId) {
+      setSongs(prevSongs => {
+        const updatedSongs = prevSongs.map(song => 
+          song.id === currentSongId 
+            ? { ...song, capoSettings: newCapoSettings, updatedAt: new Date() }
+            : song
+        );
+        // Force immediate save for capo changes
+        forceSave(updatedSongs);
+        return updatedSongs;
+      });
+    }
   }
 
   function handleCreateSong(name: string) {
+    console.log('🔧 Creating new song:', name);
     const newSong: Song = {
       id: generateSongId(),
       name,
       bpm: 120,
       progressions: [],
       tuning: currentTuning,
-      capoSettings,
+      capoSettings: capoSettings,
       createdAt: new Date(),
       updatedAt: new Date()
     };
     
+    console.log('🔧 New song object:', newSong);
+    
     setSongs(prevSongs => {
       const updatedSongs = [...prevSongs, newSong];
-      saveSongs(updatedSongs);
+      console.log('🔧 Updated songs array:', updatedSongs);
+      // Force immediate save for song creation
+      forceSave(updatedSongs);
       return updatedSongs;
     });
     
@@ -228,6 +294,7 @@ function App() {
     setCurrentSongId(newSong.id);
     saveCurrentSong(newSong.id);
     setCurrentBpm(newSong.bpm);
+    // No need to set tuning/capo as they're already current
   }
 
   function handleRenameSong(songId: string, newName: string) {
@@ -237,17 +304,29 @@ function App() {
           ? { ...song, name: newName, updatedAt: new Date() }
           : song
       );
-      saveSongs(updatedSongs);
+      // Force immediate save for song rename
+      forceSave(updatedSongs);
       return updatedSongs;
     });
   }
 
   function handleDeleteSong(songId: string) {
+    // Find the song to delete for file cleanup
+    const songToDelete = songs.find(song => song.id === songId);
+    
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.filter(song => song.id !== songId);
-      saveSongs(updatedSongs);
+      // Force immediate save for song deletion
+      forceSave(updatedSongs);
       return updatedSongs;
     });
+    
+    // Delete the individual song file (async, don't block)
+    if (songToDelete) {
+      deleteSongFile(songToDelete).catch(error => {
+        console.warn(`Failed to delete file for song "${songToDelete.name}":`, error);
+      });
+    }
     
     // If deleting current song, clear selection
     if (currentSongId === songId) {
@@ -270,7 +349,7 @@ function App() {
           ? updateProgressionBpm(song, progressionId, bpm)
           : song
       );
-      saveSongs(updatedSongs);
+      // Progression changes are auto-saved
       return updatedSongs;
     });
   }
@@ -288,7 +367,7 @@ function App() {
         }
         return song;
       });
-      saveSongs(updatedSongs);
+      // Auto-saved via useEffect
       return updatedSongs;
     });
   }
@@ -308,7 +387,7 @@ function App() {
         }
         return song;
       });
-      saveSongs(updatedSongs);
+      // Auto-saved via useEffect
       return updatedSongs;
     });
   }
@@ -324,7 +403,7 @@ function App() {
         }
         return song;
       });
-      saveSongs(updatedSongs);
+      // Auto-saved via useEffect
       return updatedSongs;
     });
   }
@@ -353,7 +432,7 @@ function App() {
         }
         return song;
       });
-      saveSongs(updatedSongs);
+      // Auto-saved via useEffect
       return updatedSongs;
     });
   }
@@ -383,7 +462,7 @@ function App() {
         }
         return song;
       });
-      saveSongs(updatedSongs);
+      // Auto-saved via useEffect
       return updatedSongs;
     });
   }
@@ -410,7 +489,7 @@ function App() {
         }
         return song;
       });
-      saveSongs(updatedSongs);
+      // Auto-saved via useEffect
       return updatedSongs;
     });
   }
@@ -434,103 +513,183 @@ function App() {
         }
         return song;
       });
-      saveSongs(updatedSongs);
+      // Auto-saved via useEffect
       return updatedSongs;
     });
   }
 
+  function handleDataRestored() {
+    // Reload songs after data is restored from backup
+    const loadedSongs = loadSongsWithRecovery();
+    setSongs(loadedSongs);
+    
+    // Clear current selection to show homepage
+    setCurrentSongId(null);
+    saveCurrentSong('');
+    
+    // Reload progressions if needed
+    const progressions = loadProgressions();
+    setSavedProgressions(progressions);
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
-      <VolumeSlider />
-      <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Chordbook</h1>
-      
-      {replacingIndex !== null && (
-        <div className="bg-blue-100 border border-blue-300 rounded p-3 mb-4">
-          <p className="text-blue-800">
-            Replacing chord #{replacingIndex + 1}: {progression[replacingIndex].name}
-          </p>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
+        <VolumeSlider />
+        <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">
           <button 
-            onClick={() => setReplacingIndex(null)}
-            className="mt-2 px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500"
+            onClick={handleBackToOverview}
+            className="hover:text-blue-600 transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 rounded px-2 py-1"
+            title="Back to Home"
           >
-            Cancel Replace
+            Chordbook
           </button>
-        </div>
-      )}
-      
-      {progression.length > 0 && (
-        <div className="mt-6">
-          <SortableChordGrid
-            progression={progression}
-            tuning={currentTuning}
-            capoSettings={capoSettings}
-            onReorder={reorderChords}
-            onReplace={replaceChord}
-            onRemove={removeChord}
-          />
-        </div>
-      )}
-      
-      {progression.length > 0 && (
-        <ProgressionList 
-          progression={progression} 
-          onRemove={removeChord} 
-          onReplace={replaceChord}
-          onReorder={reorderChords}
-        />
-      )}
+        </h1>
+        
+        {replacingIndex !== null && (
+          <div className="bg-blue-100 border border-blue-300 rounded p-3 mb-4">
+            <p className="text-blue-800">
+              Replacing chord #{replacingIndex + 1}: {progression[replacingIndex].name}
+            </p>
+            <button 
+              onClick={() => setReplacingIndex(null)}
+              className="mt-2 px-3 py-1 bg-gray-400 text-white rounded hover:bg-gray-500"
+            >
+              Cancel Replace
+            </button>
+          </div>
+        )}
+        
+        {progression.length > 0 && (
+          <div className="mt-6">
+            <ComponentErrorBoundary 
+              componentName="SortableChordGrid" 
+              fallbackHeight="300px"
+              onError={(error, componentName) => errorMonitor.logComponentError(componentName, error)}
+            >
+              <SortableChordGrid
+                progression={progression}
+                tuning={currentTuning}
+                capoSettings={capoSettings}
+                onReorder={reorderChords}
+                onReplace={replaceChord}
+                onRemove={removeChord}
+              />
+            </ComponentErrorBoundary>
+          </div>
+        )}
+        
+        {progression.length > 0 && (
+          <ComponentErrorBoundary 
+            componentName="ProgressionList" 
+            fallbackHeight="200px"
+            onError={(error, componentName) => errorMonitor.logComponentError(componentName, error)}
+          >
+            <ProgressionList 
+              progression={progression} 
+              onRemove={removeChord} 
+              onReplace={replaceChord}
+              onReorder={reorderChords}
+            />
+          </ComponentErrorBoundary>
+        )}
 
-      {/* Song Manager */}
-      <div className="mb-8">
-        <SongManager 
-          songs={songs}
-          currentSong={songs.find(song => song.id === currentSongId) || null}
-          onSelectSong={handleSelectSong}
-          onCreateSong={handleCreateSong}
-          onRenameSong={handleRenameSong}
-          onUpdateSongBpm={handleSongBpmChange}
-          onDeleteSong={handleDeleteSong}
-          onBackToOverview={handleBackToOverview}
-          currentTuning={currentTuning}
-          capoSettings={capoSettings}
-          onTuningChange={setCurrentTuning}
-          onCapoChange={setCapoSettings}
-        />
+        {/* Home Page or Song View */}
+        {!currentSongId ? (
+          /* Home Page - Show when no song is selected */
+          <ComponentErrorBoundary 
+            componentName="HomePage" 
+            fallbackHeight="400px"
+            onError={(error, componentName) => errorMonitor.logComponentError(componentName, error)}
+          >
+            <HomePage
+              recentSongs={getRecentlyOpenedSongs(songs, 4)}
+              allSongs={getSongsByLastOpened(songs)}
+              onSelectSong={handleSelectSong}
+              onCreateSong={handleCreateSong}
+            />
+          </ComponentErrorBoundary>
+        ) : (
+          /* Song View - Show when a song is selected */
+          <div>
+            {/* Song Manager */}
+            <div className="mb-8">
+              <ComponentErrorBoundary 
+                componentName="SongManager" 
+                fallbackHeight="200px"
+                onError={(error, componentName) => errorMonitor.logComponentError(componentName, error)}
+              >
+                <SongManager 
+                  songs={songs}
+                  currentSong={songs.find(song => song.id === currentSongId) || null}
+                  onSelectSong={handleSelectSong}
+                  onCreateSong={handleCreateSong}
+                  onRenameSong={handleRenameSong}
+                  onUpdateSongBpm={handleSongBpmChange}
+                  onDeleteSong={handleDeleteSong}
+                  onBackToOverview={handleBackToOverview}
+                  currentTuning={currentTuning}
+                  capoSettings={capoSettings}
+                  onTuningChange={handleTuningChange}
+                  onCapoChange={handleCapoChange}
+                />
+              </ComponentErrorBoundary>
+            </div>
+
+            {/* Song Progressions */}
+            <div className="mb-8">
+              <ComponentErrorBoundary 
+                componentName="SongProgressions" 
+                fallbackHeight="300px"
+                onError={(error, componentName) => errorMonitor.logComponentError(componentName, error)}
+              >
+                <SongProgressions 
+                  progressions={songs.find(song => song.id === currentSongId)?.progressions || []}
+                  onReorderProgressions={handleReorderProgressions}
+                  onEditProgression={handleEditProgression}
+                  onUpdateProgressionBpm={handleUpdateProgressionBpm}
+                  onDeleteProgression={handleDeleteProgression}
+                  onCreateProgression={handleCreateProgression}
+                  onSelectProgression={handleSelectProgression}
+                  currentProgressionId={null}
+                  onChordReorder={handleChordReorder}
+                  onChordReplace={handleChordReplace}
+                  onChordRemove={handleChordRemove}
+                  onAddChord={handleAddChord}
+                  tuning={currentTuning}
+                  capoSettings={capoSettings}
+                  bpm={currentBpm}
+                />
+              </ComponentErrorBoundary>
+            </div>
+          </div>
+        )}
+        
+        <ComponentErrorBoundary 
+          componentName="BackupManager" 
+          fallbackHeight="100px"
+          onError={(error, componentName) => errorMonitor.logComponentError(componentName, error)}
+        >
+          <BackupManager onDataRestored={handleDataRestored} />
+        </ComponentErrorBoundary>
+        <ComponentErrorBoundary 
+          componentName="DebugStorage" 
+          fallbackHeight="50px"
+          onError={(error, componentName) => errorMonitor.logComponentError(componentName, error)}
+        >
+          <DebugStorage />
+        </ComponentErrorBoundary>
+        
+        {/* Error Recovery Panel */}
+        <ErrorRecoveryPanel />
+        
+        {/* Error Test Component (Development Only) */}
+        <ErrorTestComponent />
+        
+        {/* Storage Test Component (Development Only) */}
+        <StorageTest />
       </div>
-
-      {/* Song Progressions */}
-      {currentSongId && (
-        <div className="mb-8">
-          <SongProgressions 
-            progressions={songs.find(song => song.id === currentSongId)?.progressions || []}
-            onReorderProgressions={handleReorderProgressions}
-            onEditProgression={handleEditProgression}
-            onUpdateProgressionBpm={handleUpdateProgressionBpm}
-            onDeleteProgression={handleDeleteProgression}
-            onCreateProgression={handleCreateProgression}
-            onSelectProgression={handleSelectProgression}
-            currentProgressionId={null}
-            onChordReorder={handleChordReorder}
-            onChordReplace={handleChordReplace}
-            onChordRemove={handleChordRemove}
-            onAddChord={handleAddChord}
-            tuning={currentTuning}
-            capoSettings={capoSettings}
-            bpm={currentBpm}
-          />
-        </div>
-      )}
-      
-      <SavedProgressions
-        progressions={savedProgressions}
-        currentProgressionId={currentProgressionId}
-        onLoadProgression={loadProgression}
-        onDeleteProgression={deleteProgression}
-        onNewProgression={newProgression}
-      />
-      
-      <DebugStorage />
-    </div>
+    </ErrorBoundary>
   )
 }
 

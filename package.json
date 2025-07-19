@@ -2,6 +2,8 @@
   "name": "chordbook",
   "private": true,
   "version": "0.0.1",
+  "description": "A guitar chord progression and song management application",
+  "author": "Your Name",
   "type": "module",
   "main": "main.cjs",
   "homepage": "./",
@@ -11,7 +13,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron": "electron .",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5174 && NODE_ENV=development electron .\"",
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5175 && NODE_ENV=development electron .\"",
     "electron-pack": "npm run build && electron-builder",
     "electron-build": "npm run build && electron-builder --publish=never",
     "electron-dist": "npm run build && electron-builder --publish=onTagOrDraft"
@@ -32,7 +34,7 @@
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.2.0",
-    "electron": "^34.0.0",
+    "electron": "^34.5.8",
     "electron-builder": "^25.1.8",
     "eslint": "^9.30.1",
     "eslint-plugin-react-hooks": "^5.2.0",
@@ -43,7 +45,7 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.35.1",
     "vite": "^7.0.4",
-    "wait-on": "^8.0.1"
+    "wait-on": "^8.0.3"
   },
   "build": {
     "appId": "com.guitarchordmap.app",

@@ -3,9 +3,19 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Example: File operations
+  // File operations for song storage
+  saveFile: (filePath, content) => ipcRenderer.invoke('file:save', filePath, content),
+  readFile: (filePath) => ipcRenderer.invoke('file:read', filePath),
+  deleteFile: (filePath) => ipcRenderer.invoke('file:delete', filePath),
+  listFiles: (dirPath) => ipcRenderer.invoke('file:list', dirPath),
+  getFileStats: (filePath) => ipcRenderer.invoke('file:stats', filePath),
+  
+  // Storage directory
+  getStorageDir: () => ipcRenderer.invoke('app:getStorageDir'),
+  
+  // Example: File dialog operations
   openFile: () => ipcRenderer.invoke('dialog:openFile'),
-  saveFile: (content) => ipcRenderer.invoke('dialog:saveFile', content),
+  saveFileDialog: (content) => ipcRenderer.invoke('dialog:saveFileDialog', content),
   
   // Example: App info
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),

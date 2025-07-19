@@ -1,0 +1,34 @@
+{
+  "name": "Chordbook",
+  "short_name": "Chordbook",
+  "description": "A chord progression and songbook app for musicians",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f0f9ff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "categories": ["music", "productivity", "education"],
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Song",
+      "short_name": "New Song",
+      "description": "Create a new song",
+      "url": "/",
+      "icons": [
+        {
+          "src": "/icon.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ]
+}

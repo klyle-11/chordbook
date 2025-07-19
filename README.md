@@ -13,7 +13,7 @@ An Electron-based guitar chord progression application built with React, TypeScr
 - **Modern UI**: Light theme built with Tailwind CSS v4
 - **Cross-Platform**: Runs as a desktop application on macOS, Windows, and Linux
 
-## Audio Features
+## Audio features
 
 - **Note Playback**: Click any fret marker to play the corresponding note
 - **Smooth Audio**: Fade-in/fade-out effects for pleasant listening

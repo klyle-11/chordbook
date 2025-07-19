@@ -1,8 +1,88 @@
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs').promises;
+const os = require('os');
 const isDev = process.env.NODE_ENV === 'development';
 
+// Storage directory for song files
+const getStorageDirectory = () => {
+  const userDataPath = app.getPath('userData');
+  const storageDir = path.join(userDataPath, 'songs');
+  return storageDir;
+};
+
+// Ensure storage directory exists
+const ensureStorageDirectory = async () => {
+  const storageDir = getStorageDirectory();
+  try {
+    await fs.access(storageDir);
+  } catch {
+    await fs.mkdir(storageDir, { recursive: true });
+    console.log('Created storage directory:', storageDir);
+  }
+  return storageDir;
+};
+
 let mainWindow;
+
+// IPC Handlers for file operations
+ipcMain.handle('file:save', async (event, filePath, content) => {
+  try {
+    await ensureStorageDirectory();
+    await fs.writeFile(filePath, content, 'utf8');
+    return true;
+  } catch (error) {
+    console.error('Error saving file:', error);
+    return false;
+  }
+});
+
+ipcMain.handle('file:read', async (event, filePath) => {
+  try {
+    const content = await fs.readFile(filePath, 'utf8');
+    return content;
+  } catch (error) {
+    console.error('Error reading file:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('file:delete', async (event, filePath) => {
+  try {
+    await fs.unlink(filePath);
+    return true;
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    return false;
+  }
+});
+
+ipcMain.handle('file:list', async (event, dirPath) => {
+  try {
+    const files = await fs.readdir(dirPath);
+    return files;
+  } catch (error) {
+    console.error('Error listing files:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('file:stats', async (event, filePath) => {
+  try {
+    const stats = await fs.stat(filePath);
+    return {
+      size: stats.size,
+      mtime: stats.mtime.toISOString()
+    };
+  } catch (error) {
+    console.error('Error getting file stats:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('app:getStorageDir', async () => {
+  return await ensureStorageDirectory();
+});
 
 function createWindow() {
   // Create the browser window

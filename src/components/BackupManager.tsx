@@ -8,6 +8,7 @@ import {
   importBackupFromJSON,
   performAutoBackup
 } from '../lib/backupService';
+import StorageStats from './StorageStats';
 
 interface BackupManagerProps {
   onDataRestored?: () => void;
@@ -253,6 +254,8 @@ export default function BackupManager({ onDataRestored }: BackupManagerProps) {
           </div>
         </div>
       )}
+      
+      <StorageStats />
     </div>
   );
 }
