@@ -137,6 +137,7 @@ function PrintableContent({ song, options }: PrintableContentProps) {
 }
 
 export default function PDFExportDialog({ song, isOpen, onClose }: PDFExportDialogProps) {
+  console.log('PDFExportDialog rendered with isOpen:', isOpen);
   const [options, setOptions] = useState<PDFExportOptions>(DEFAULT_PDF_OPTIONS);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMethod, setExportMethod] = useState<'text' | 'visual'>('visual');

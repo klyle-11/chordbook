@@ -45,6 +45,8 @@ function SortableProgressionItem({
   songBpm,
   isNewlyCreated = false
 }: SortableProgressionItemProps) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
   const {
     attributes,
     listeners,
@@ -60,7 +62,21 @@ function SortableProgressionItem({
 
   const effectiveBpm = progression.bpm || songBpm;
 
+  const handleDeleteClick = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    onDelete(progression.id);
+    setShowDeleteConfirm(false);
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteConfirm(false);
+  };
+
   return (
+    <>
     <div 
       ref={setNodeRef} 
       style={style} 
@@ -142,7 +158,7 @@ function SortableProgressionItem({
 
           {/* Delete Button */}
           <button
-            onClick={() => onDelete(progression.id)}
+            onClick={handleDeleteClick}
             className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
             title="Delete progression"
           >
@@ -174,6 +190,42 @@ function SortableProgressionItem({
         </div>
       )}
     </div>
+
+    {/* Delete Confirmation Modal */}
+    {showDeleteConfirm && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Delete Chord Progression
+            </h3>
+            <p className="text-gray-600">
+              Are you sure you want to delete the progression "{progression.name}"?
+              {progression.chords.length > 0 && (
+                <span className="block mt-1 text-sm text-red-600">
+                  This will permanently delete {progression.chords.length} chord{progression.chords.length !== 1 ? 's' : ''}.
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={handleDeleteCancel}
+              className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteConfirm}
+              className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

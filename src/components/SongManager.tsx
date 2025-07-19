@@ -107,7 +107,11 @@ export default function SongManager({
           
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowPDFExport(true)}
+              onClick={() => {
+                console.log('PDF Export button clicked, showPDFExport:', showPDFExport);
+                setShowPDFExport(true);
+                console.log('After setShowPDFExport(true)');
+              }}
               className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
