@@ -95,11 +95,11 @@ export function Metronome({ onTempoChange }: MetronomeProps) {
   };
 
   return (
-    <div className="flex items-center space-x-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+    <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
       {/* Play/Stop Button */}
       <button
         onClick={isPlaying ? stopMetronome : startMetronome}
-        className={`px-4 py-2 rounded font-medium transition-colors ${
+        className={`px-3 sm:px-4 py-2 rounded font-medium transition-colors text-sm sm:text-base ${
           isPlaying
             ? 'bg-gray-400 text-white hover:bg-gray-500'
             : 'bg-gray-300 text-gray-700 hover:bg-gray-400 hover:text-white'
@@ -110,7 +110,7 @@ export function Metronome({ onTempoChange }: MetronomeProps) {
 
       {/* BPM Input */}
       <div className="flex items-center space-x-2">
-        <label htmlFor="bpm" className="text-sm font-medium text-gray-700">
+        <label htmlFor="bpm" className="text-xs sm:text-sm font-medium text-gray-700">
           BPM:
         </label>
         <input
@@ -120,13 +120,13 @@ export function Metronome({ onTempoChange }: MetronomeProps) {
           max="300"
           value={bpm}
           onChange={handleBpmChange}
-          className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-12 sm:w-16 px-1 sm:px-2 py-1 border border-gray-300 rounded text-center text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {/* Volume Control */}
       <div className="flex items-center space-x-2">
-        <label htmlFor="volume" className="text-sm font-medium text-gray-700">
+        <label htmlFor="volume" className="text-xs sm:text-sm font-medium text-gray-700">
           🔊
         </label>
         <input
@@ -137,16 +137,16 @@ export function Metronome({ onTempoChange }: MetronomeProps) {
           step="0.1"
           value={volume}
           onChange={handleVolumeChange}
-          className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+          className="w-16 sm:w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
         />
-        <span className="text-xs text-gray-500 w-8">
+        <span className="text-xs text-gray-500 w-6 sm:w-8">
           {Math.round(volume * 100)}%
         </span>
       </div>
 
       {/* Beat Indicator */}
       <div
-        className={`w-4 h-4 rounded-full transition-colors duration-100 ${
+        className={`w-3 h-3 sm:w-4 sm:h-4 rounded-full transition-colors duration-100 ${
           isPlaying ? 'bg-gray-400 animate-pulse' : 'bg-gray-300'
         }`}
       />

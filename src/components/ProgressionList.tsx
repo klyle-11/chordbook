@@ -50,27 +50,27 @@ function SortableChordItem({ chord, index, onRemove, onReplace }: SortableChordI
     <li 
       ref={setNodeRef}
       style={style}
-      className="flex justify-between items-center bg-white border border-gray-200 p-3 rounded shadow-sm"
+      className="flex justify-between items-center bg-white border border-gray-200 p-2 sm:p-3 rounded shadow-sm"
     >
-      <div className="flex items-center flex-1 mr-4">
+      <div className="flex items-center flex-1 mr-2 sm:mr-4 min-w-0">
         <div 
-          className="cursor-grab active:cursor-grabbing mr-3 text-gray-400 hover:text-gray-600"
+          className="cursor-grab active:cursor-grabbing mr-2 sm:mr-3 text-gray-400 hover:text-gray-600 flex-shrink-0"
           {...attributes}
           {...listeners}
         >
           ⋮⋮
         </div>
-        <span className="font-medium text-gray-800 truncate">{chord.name}</span>
+        <span className="font-medium text-gray-800 truncate text-sm sm:text-base">{chord.name}</span>
       </div>
-      <div className="flex space-x-2 flex-shrink-0">
+      <div className="flex space-x-1 sm:space-x-2 flex-shrink-0">
         <button 
-          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+          className="px-2 sm:px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm rounded transition-colors"
           onClick={() => onReplace(index)}
         >
           Replace
         </button>
         <button 
-          className="w-6 h-6 bg-red-600 hover:bg-red-700 text-white text-sm rounded flex items-center justify-center transition-colors"
+          className="w-6 h-6 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm rounded flex items-center justify-center transition-colors"
           onClick={() => onRemove(index)}
           title="Remove chord"
         >
@@ -105,8 +105,8 @@ export default function ProgressionList({ progression, onRemove, onReplace, onRe
     const items = progression.map((_, index) => `chord-list-${index}`);
 
     return(
-        <div className="mt-8 max-w-[50%]">
-            <h2 className="text-xl mb-2 text-gray-800">Chord Progression</h2>
+        <div className="mt-6 sm:mt-8 w-full sm:max-w-[50%]">
+            <h2 className="text-lg sm:text-xl mb-2 text-gray-800">Chord Progression</h2>
             <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}

@@ -396,17 +396,17 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-8">
       <VolumeSlider />
       <h1 
-        className="text-3xl font-bold text-center mb-8 text-gray-800 cursor-pointer hover:text-blue-600 transition-colors duration-200"
+        className="text-2xl sm:text-3xl font-bold text-center mb-6 sm:mb-8 text-gray-800 cursor-pointer hover:text-blue-600 transition-colors duration-200"
         onClick={handleBackToOverview}
       >
         Chordbook
       </h1>
       
       {/* Integrated Metronome and Auto Scroll Controls */}
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <IntegratedMetronome 
           onTempoChange={setCurrentBpm} 
           currentBpm={currentBpm}
@@ -414,15 +414,15 @@ function App() {
       </div>
       
       {/* Tuning and Capo Controls */}
-      <div className="flex gap-6 mb-6">
-        <div>
+      <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-4 sm:mb-6">
+        <div className="w-full sm:w-auto">
           <TuningSelector 
             currentTuning={currentTuning}
             onTuningChange={setCurrentTuning}
           />
         </div>
         
-        <div>
+        <div className="w-full sm:w-auto">
           <CapoSelector
             capoSettings={capoSettings}
             onCapoChange={setCapoSettings}
@@ -431,7 +431,7 @@ function App() {
       </div>
 
       {/* Song Manager */}
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <SongManager 
           songs={songs}
           currentSong={songs.find(song => song.id === currentSongId) || null}
@@ -448,7 +448,7 @@ function App() {
       {currentSongId && (() => {
         const currentSong = songs.find(song => song.id === currentSongId);
         return currentSong ? (
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8">
             <SongScale song={currentSong} />
           </div>
         ) : null;
@@ -458,7 +458,7 @@ function App() {
       {currentSongId && (() => {
         const currentSong = songs.find(song => song.id === currentSongId);
         return currentSong ? (
-          <div className="mb-8">
+          <div className="mb-6 sm:mb-8">
             <SongProgressions 
               progressions={currentSong.progressions || []}
               onReorderProgressions={handleReorderProgressions}
@@ -479,7 +479,7 @@ function App() {
       })()}
 
       {/* Data Management - Bottom Section */}
-      <div className="mt-16 w-1/2 mx-auto">
+      <div className="mt-12 sm:mt-16 w-full sm:w-1/2 mx-auto px-2 sm:px-0">
         <BackupManager onDataRestored={() => window.location.reload()} />
       </div>
       

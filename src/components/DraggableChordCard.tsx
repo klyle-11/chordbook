@@ -42,16 +42,16 @@ export default function DraggableChordCard({
         style={style}
         {...attributes}
         data-chord-diagram
-        className={`w-full max-w-7xl bg-white rounded-lg p-3 transition-all duration-200 border-2 shadow-sm ${
+        className={`w-full bg-white rounded-lg p-3 sm:p-4 transition-all duration-200 border-2 shadow-sm ${
           isDragging 
             ? 'opacity-70 shadow-2xl z-50 border-blue-500 scale-105' 
             : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
         }`}
       >
       {/* Drag handle and chord info */}
-      <div className="flex items-center justify-between mb-1">
-        <h3 className="text-lg font-medium text-gray-800">{chord.name}</h3>
-        <div className="flex gap-2">
+      <div className="flex items-center justify-between mb-2 sm:mb-1">
+        <h3 className="text-base sm:text-lg font-medium text-gray-800 truncate min-w-0 flex-1 mr-2">{chord.name}</h3>
+        <div className="flex gap-1 sm:gap-2 flex-shrink-0">
           <button
             onClick={() => onReplace(index)}
             className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
@@ -75,11 +75,13 @@ export default function DraggableChordCard({
         </div>
       </div>
       
-      <p className="text-sm text-gray-600 mb-2 text-center">
+      <p className="text-xs sm:text-sm text-gray-600 mb-2 text-center break-words">
         Notes: {chord.notes.join(", ")}
       </p>
       
-      <FretBoard chordNotes={chord.notes} tuning={tuning} capoSettings={capoSettings} />
+      <div className="overflow-x-auto">
+        <FretBoard chordNotes={chord.notes} tuning={tuning} capoSettings={capoSettings} />
+      </div>
       </div>
     </div>
   );

@@ -193,14 +193,14 @@ function SortableProgressionItem({
 
     {/* Delete Confirmation Modal */}
     {showDeleteConfirm && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full shadow-xl">
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
               Delete Chord Progression
             </h3>
-            <p className="text-gray-600">
-              Are you sure you want to delete the progression "{progression.name}"?
+            <p className="text-sm sm:text-base text-gray-600">
+              Are you sure you want to delete the progression "<span className="break-words font-medium">{progression.name}</span>"?
               {progression.chords.length > 0 && (
                 <span className="block mt-1 text-sm text-red-600">
                   This will permanently delete {progression.chords.length} chord{progression.chords.length !== 1 ? 's' : ''}.
@@ -208,16 +208,16 @@ function SortableProgressionItem({
               )}
             </p>
           </div>
-          <div className="flex gap-3 justify-end">
+          <div className="flex flex-col sm:flex-row gap-3 justify-end">
             <button
               onClick={handleDeleteCancel}
-              className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors"
+              className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors order-2 sm:order-1"
             >
               Cancel
             </button>
             <button
               onClick={handleDeleteConfirm}
-              className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+              className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors order-1 sm:order-2"
             >
               Delete
             </button>
