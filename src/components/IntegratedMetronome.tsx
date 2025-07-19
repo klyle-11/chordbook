@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 interface IntegratedMetronomeProps {
   onTempoChange?: (bpm: number) => void;
+  currentBpm?: number;
 }
 
-export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps) {
+export function IntegratedMetronome({ onTempoChange, currentBpm }: IntegratedMetronomeProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
-  const [bpm, setBpm] = useState(120);
-  const [bpmInput, setBpmInput] = useState('120'); // Separate state for input display
+  const [bpm, setBpm] = useState(currentBpm || 120);
+  const [bpmInput, setBpmInput] = useState(String(currentBpm || 120)); // Separate state for input display
   const [volume, setVolume] = useState(0.5);
   
   // Metronome refs
@@ -35,6 +36,15 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
   useEffect(() => {
     onTempoChange?.(bpm);
   }, [bpm, onTempoChange]);
+
+  // Sync with external BPM changes (e.g., when switching songs)
+  // Only update if there's a significant difference to avoid feedback loops
+  useEffect(() => {
+    if (currentBpm !== undefined && Math.abs(currentBpm - bpm) > 0.1) {
+      setBpm(currentBpm);
+      setBpmInput(String(currentBpm));
+    }
+  }, [currentBpm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const playClick = useCallback(() => {
     if (!audioContextRef.current) return;
