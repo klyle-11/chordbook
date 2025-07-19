@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import type { Song } from '../types/song';
 import { EditableText } from './EditableText';
-import { formatSongInfo } from '../lib/displayUtils';
-import { ChordIcons } from './ChordIcons';
 import { DEFAULT_TUNING } from '../lib/tunings';
 import { BpmInput } from './BpmInput';
 import PDFExportDialog from './PDFExportDialog';
@@ -32,6 +30,17 @@ export default function SongManager({
   const [newSongName, setNewSongName] = useState('');
   const [songToDelete, setSongToDelete] = useState<string | null>(null);
   const [showPDFExport, setShowPDFExport] = useState(false);
+  const [showAllSongs, setShowAllSongs] = useState(false);
+
+  // Sort songs by lastOpened date (most recent first)
+  const sortedSongs = [...songs].sort((a, b) => {
+    const aLastOpened = a.lastOpened?.getTime() || 0;
+    const bLastOpened = b.lastOpened?.getTime() || 0;
+    return bLastOpened - aLastOpened;
+  });
+
+  const recentSongs = sortedSongs.slice(0, 4);
+  const remainingSongs = sortedSongs.slice(4);
 
   const handleCreateSong = () => {
     if (newSongName.trim()) {
@@ -49,6 +58,62 @@ export default function SongManager({
       setNewSongName('');
     }
   };
+
+  const renderSongCard = (song: Song, showBpmTuning = false) => (
+    <div
+      key={song.id}
+      onClick={() => onSelectSong(song)}
+      className="p-6 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
+    >
+      <div className="flex items-start justify-between mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 truncate flex-1">
+          {song.name}
+        </h3>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteClick(song.id);
+          }}
+          className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
+      
+      <div className="text-sm text-gray-600 mb-3">
+        {song.progressions.length} progression{song.progressions.length !== 1 ? 's' : ''}
+        {song.lastOpened && (
+          <span className="text-gray-400 ml-2">
+            • Last opened: {song.lastOpened.toLocaleDateString()}
+          </span>
+        )}
+      </div>
+
+      {showBpmTuning && (
+        <div className="text-sm text-gray-500 mb-3 flex gap-4">
+          <span>BPM: {song.bpm || 120}</span>
+          <span>Tuning: {song.tuning?.name || DEFAULT_TUNING.name}</span>
+        </div>
+      )}
+
+      {song.progressions.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {song.progressions.slice(0, 3).map((progression, index) => (
+            <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+              {progression.name}
+            </span>
+          ))}
+          {song.progressions.length > 3 && (
+            <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded text-xs">
+              +{song.progressions.length - 3} more
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   const handleDeleteClick = (songId: string) => {
     setSongToDelete(songId);
@@ -231,58 +296,49 @@ export default function SongManager({
           <p className="text-sm text-gray-500">Create your first song to get started</p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {songs.map((song) => (
-            <div
-              key={song.id}
-              onClick={() => onSelectSong(song)}
-              className="p-6 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <h3 className="text-lg font-semibold text-gray-900 truncate flex-1">
-                  {song.name}
-                </h3>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteClick(song.id);
-                  }}
-                  className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                  title="Delete song"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+        <div className="space-y-8">
+          {/* Recent Songs Section */}
+          {recentSongs.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Songs</h3>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {recentSongs.map((song) => renderSongCard(song))}
               </div>
+            </div>
+          )}
+
+          {/* All Songs File Picker */}
+          {remainingSongs.length > 0 && (
+            <div>
+              <button
+                onClick={() => setShowAllSongs(!showAllSongs)}
+                className="flex items-center gap-2 text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors mb-4"
+              >
+                <svg 
+                  className={`w-5 h-5 transition-transform ${showAllSongs ? 'rotate-90' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                All Songs ({remainingSongs.length})
+              </button>
               
-              <p className="text-sm text-gray-600 mb-3">
-                {song.progressions.length} progression{song.progressions.length !== 1 ? 's' : ''}
-              </p>
-              
-              <p className="text-xs text-gray-500 mb-3">
-                {formatSongInfo(song.tuning, song.capoSettings, song.bpm)}
-              </p>
-              
-              {song.progressions.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-xs font-medium text-gray-700 mb-2">Chord Progressions:</p>
-                  {song.progressions.map((progression) => (
-                    <div key={progression.id} className="mb-2 last:mb-0">
-                      <p className="text-xs font-medium text-gray-600 mb-1 truncate">
-                        {progression.name}
-                      </p>
-                      <ChordIcons 
-                        chords={progression.chords} 
-                        tuning={song.tuning || DEFAULT_TUNING} 
-                        className="mb-1"
-                      />
-                    </div>
-                  ))}
+              {showAllSongs && (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {remainingSongs.map((song) => renderSongCard(song, true))}
                 </div>
               )}
             </div>
-          ))}
+          )}
+
+          {/* Show all songs in a single grid if no recent songs */}
+          {recentSongs.length === 0 && (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {sortedSongs.map((song) => renderSongCard(song, true))}
+            </div>
+          )}
         </div>
       )}
 

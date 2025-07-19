@@ -141,6 +141,17 @@ function App() {
   }
 
   function handleSelectSong(song: Song) {
+    // Update song's lastOpened timestamp
+    const updatedSong = {
+      ...song,
+      lastOpened: new Date()
+    };
+    
+    // Update the song in the songs list
+    const updatedSongs = songs.map(s => s.id === song.id ? updatedSong : s);
+    setSongs(updatedSongs);
+    saveSongs(updatedSongs);
+    
     setCurrentSongId(song.id);
     saveCurrentSong(song.id);
     
@@ -387,7 +398,12 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
       <VolumeSlider />
-      <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Chordbook</h1>
+      <h1 
+        className="text-3xl font-bold text-center mb-8 text-gray-800 cursor-pointer hover:text-blue-600 transition-colors duration-200"
+        onClick={handleBackToOverview}
+      >
+        Chordbook
+      </h1>
       
       {/* Integrated Metronome and Auto Scroll Controls */}
       <div className="mb-6">
@@ -429,32 +445,38 @@ function App() {
       </div>
 
       {/* Song Scale Analysis */}
-      {currentSongId && (
-        <div className="mb-8">
-          <SongScale song={songs.find(song => song.id === currentSongId)!} />
-        </div>
-      )}
+      {currentSongId && (() => {
+        const currentSong = songs.find(song => song.id === currentSongId);
+        return currentSong ? (
+          <div className="mb-8">
+            <SongScale song={currentSong} />
+          </div>
+        ) : null;
+      })()}
 
       {/* Song Progressions */}
-      {currentSongId && (
-        <div className="mb-8">
-          <SongProgressions 
-            progressions={songs.find(song => song.id === currentSongId)?.progressions || []}
-            onReorderProgressions={handleReorderProgressions}
-            onEditProgression={handleEditProgression}
-            onUpdateProgressionBpm={handleUpdateProgressionBpm}
-            onDeleteProgression={handleDeleteProgression}
-            onChordReorder={handleChordReorder}
-            onChordReplace={handleChordReplace}
-            onChordRemove={handleChordRemove}
-            onAddChord={handleAddChord}
-            onAddProgression={() => handleAddProgression(currentSongId)}
-            tuning={currentTuning}
-            capoSettings={capoSettings}
-            bpm={currentBpm}
-          />
-        </div>
-      )}
+      {currentSongId && (() => {
+        const currentSong = songs.find(song => song.id === currentSongId);
+        return currentSong ? (
+          <div className="mb-8">
+            <SongProgressions 
+              progressions={currentSong.progressions || []}
+              onReorderProgressions={handleReorderProgressions}
+              onEditProgression={handleEditProgression}
+              onUpdateProgressionBpm={handleUpdateProgressionBpm}
+              onDeleteProgression={handleDeleteProgression}
+              onChordReorder={handleChordReorder}
+              onChordReplace={handleChordReplace}
+              onChordRemove={handleChordRemove}
+              onAddChord={handleAddChord}
+              onAddProgression={() => handleAddProgression(currentSongId)}
+              tuning={currentTuning}
+              capoSettings={capoSettings}
+              bpm={currentBpm}
+            />
+          </div>
+        ) : null;
+      })()}
 
       {/* Data Management - Bottom Section */}
       <div className="mt-16 w-1/2 mx-auto">

@@ -1,19 +1,10 @@
 import type { Song, SavedSong, NamedProgression } from '../types/song';
 import type { Progression } from '../types/progression';
 import { DEFAULT_TUNING, type Tuning, type CapoSettings } from './tunings';
-import { saveSongsToFiles } from './fileStorage';
 
 const SONGS_STORAGE_KEY = 'chordbook-songs';
 const CURRENT_SONG_KEY = 'chordbook-current-song';
 const MIGRATION_FLAG_KEY = 'chordbook-songs-migrated';
-const BACKUP_STORAGE_KEY = 'chordbook-songs-backup';
-const AUTO_SAVE_INTERVAL = 5000; // 5 seconds
-
-// Auto-save timer and failure tracking
-let autoSaveTimer: NodeJS.Timeout | null = null;
-let consecutiveFailures = 0;
-const MAX_CONSECUTIVE_FAILURES = 3;
-let autoSaveDisabled = false;
 
 export function generateSongId(): string {
   return 'song-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -24,27 +15,16 @@ export function generateProgressionId(): string {
 }
 
 function serializeSong(song: Song): SavedSong {
-  // Helper function to safely convert to ISO string
-  const safeToISOString = (date: Date | string): string => {
-    if (typeof date === 'string') {
-      return date; // Already a string, return as-is
-    }
-    if (date instanceof Date) {
-      return date.toISOString();
-    }
-    // Fallback for any other type
-    return new Date(date).toISOString();
-  };
-
   return {
     ...song,
     progressions: song.progressions.map(p => ({
       ...p,
-      createdAt: safeToISOString(p.createdAt),
-      updatedAt: safeToISOString(p.updatedAt)
+      createdAt: p.createdAt.toISOString(),
+      updatedAt: p.updatedAt.toISOString()
     })),
-    createdAt: safeToISOString(song.createdAt),
-    updatedAt: safeToISOString(song.updatedAt)
+    createdAt: song.createdAt.toISOString(),
+    updatedAt: song.updatedAt.toISOString(),
+    lastOpened: song.lastOpened?.toISOString()
   };
 }
 
@@ -56,210 +36,32 @@ function deserializeSong(savedSong: SavedSong): Song {
       createdAt: new Date(p.createdAt),
       updatedAt: new Date(p.updatedAt)
     })),
-    bpm: savedSong.bpm || 120, // Default to 120 BPM for existing songs
     createdAt: new Date(savedSong.createdAt),
-    updatedAt: new Date(savedSong.updatedAt)
+    updatedAt: new Date(savedSong.updatedAt),
+    lastOpened: savedSong.lastOpened ? new Date(savedSong.lastOpened) : undefined
   };
 }
 
 export function loadSongs(): Song[] {
   try {
     const saved = localStorage.getItem(SONGS_STORAGE_KEY);
-    
     if (saved) {
-      const parsedData = JSON.parse(saved);
-      
-      // Check if it's the new consolidated format
-      if (parsedData.version === '2.0' && parsedData.songs) {
-        const deserializedSongs = parsedData.songs.map(deserializeSong);
-        return deserializedSongs;
-      } 
-      // Legacy format - direct array
-      else if (Array.isArray(parsedData)) {
-        const deserializedSongs = parsedData.map(deserializeSong);
-        return deserializedSongs;
-      }
+      const savedSongs: SavedSong[] = JSON.parse(saved);
+      return savedSongs.map(deserializeSong);
     }
-    
-    return [];
   } catch (error) {
-    console.error('Failed to load songs:', error);
-    return [];
+    console.error('Error loading songs:', error);
   }
+  return [];
 }
 
 export function saveSongs(songs: Song[]): void {
-  // Check if auto-save is disabled due to previous failures
-  if (autoSaveDisabled) {
-    console.warn('🚫 Auto-save disabled due to repeated failures. Use reenableAutoSave() to re-enable.');
-    return;
-  }
-  
-  // Don't fail if there are no songs to save
-  if (songs.length === 0) {
-    return;
-  }
-
   try {
-    // Create backup before saving
-    const currentData = localStorage.getItem(SONGS_STORAGE_KEY);
-    if (currentData) {
-      try {
-        localStorage.setItem(BACKUP_STORAGE_KEY, currentData);
-      } catch (backupError) {
-        console.warn('🔧 Failed to create backup - storage might be full:', backupError);
-        // Continue without backup if storage is full
-      }
-    }
-    
     const serializedSongs = songs.map(serializeSong);
-    
-    // Create consolidated data structure
-    const consolidatedData = {
-      version: '2.0',
-      saveType: 'localStorage-consolidated',
-      savedAt: new Date().toISOString(),
-      songCount: serializedSongs.length,
-      totalProgressions: serializedSongs.reduce((total: number, song) => total + (song.progressions?.length || 0), 0),
-      songs: serializedSongs
-    };
-    
-    try {
-      localStorage.setItem(SONGS_STORAGE_KEY, JSON.stringify(consolidatedData));
-      console.log('🔧 Saved to localStorage with consolidated format');
-    } catch (storageError) {
-      // Handle storage quota errors specifically
-      if (storageError instanceof DOMException && storageError.code === 22) {
-        console.error('🔧 Storage quota exceeded - attempting cleanup');
-        // Clean up old individual song files and other old data
-        const keys = Object.keys(localStorage);
-        const oldKeys = keys.filter(key => 
-          key.startsWith('chordbook-song-') || 
-          key.startsWith('chordbook-file-') ||
-          key.startsWith('chordbook-old-')
-        );
-        
-        oldKeys.forEach(key => {
-          try {
-            localStorage.removeItem(key);
-          } catch {
-            // Ignore cleanup errors
-          }
-        });
-        
-        // Try saving again after cleanup
-        localStorage.setItem(SONGS_STORAGE_KEY, JSON.stringify(consolidatedData));
-      } else {
-        throw storageError; // Re-throw non-quota errors
-      }
-    }
-    
-    // The data is already saved above, so we're done with the main save operation
-    // Clean up old individual song files from localStorage to save space
-    const oldSongKeys = Object.keys(localStorage).filter(key => key.startsWith('chordbook-song-'));
-    oldSongKeys.forEach(key => {
-      try {
-        localStorage.removeItem(key);
-      } catch {
-        // Ignore cleanup errors
-      }
-    });
-    
-    // Only save to files if we haven't had too many failures AND we're in Electron environment
-    const isElectronEnv = typeof window !== 'undefined' && window.electronAPI;
-    if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES && isElectronEnv) {
-      // Save to individual JSON files (async, don't block)
-      saveSongsToFiles(songs).catch(error => {
-        // Only increment if not already at max (prevent unbounded growth)
-        if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
-          consecutiveFailures++;
-          console.warn(`Failed to save songs to files (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
-          
-          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-            console.error('🚫 Disabling file saves due to repeated failures');
-            autoSaveDisabled = true;
-          }
-        } else {
-          console.warn('File save failed but already at max failure count');
-        }
-      });
-    } else if (!isElectronEnv) {
-      console.log('🌐 Browser environment detected - skipping file save (localStorage only)');
-    } else {
-      console.log('🚫 Skipping file save due to previous failures');
-    }
-    
-    // Reset failure counter on successful localStorage save
-    consecutiveFailures = 0;
-    console.log(`🔧 Successfully saved ${songs.length} songs`);
+    localStorage.setItem(SONGS_STORAGE_KEY, JSON.stringify(serializedSongs));
   } catch (error) {
-    // Only increment if not already at max (prevent unbounded growth)
-    if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
-      consecutiveFailures++;
-      console.error(`🔧 Critical error saving songs (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
-      
-      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        console.error('🚫 Disabling auto-save due to repeated failures');
-        autoSaveDisabled = true;
-      }
-    } else {
-      console.error('🔧 Critical error saving songs (already at max failures):', error);
-    }
-    
-    // Try to recover from backup if available
-    try {
-      const backup = localStorage.getItem(BACKUP_STORAGE_KEY);
-      if (backup) {
-        localStorage.setItem(SONGS_STORAGE_KEY, backup);
-        console.log('🔧 Restored from backup after save failure');
-      }
-    } catch (backupError) {
-      console.error('🔧 Failed to restore from backup:', backupError);
-    }
+    console.error('Error saving songs:', error);
   }
-}
-
-// Enhanced auto-save function with debouncing
-export function scheduleAutoSave(songs: Song[], callback?: () => void): void {
-  if (autoSaveTimer) {
-    clearTimeout(autoSaveTimer);
-  }
-  
-  autoSaveTimer = setTimeout(() => {
-    saveSongs(songs);
-    callback?.();
-  }, AUTO_SAVE_INTERVAL);
-}
-
-// Immediate save for critical operations
-export function forceSave(songs: Song[]): void {
-  if (autoSaveTimer) {
-    clearTimeout(autoSaveTimer);
-    autoSaveTimer = null;
-  }
-  saveSongs(songs);
-}
-
-// Re-enable auto-save after failures
-export function reenableAutoSave(): void {
-  console.log('🔄 Re-enabling auto-save and resetting failure counters');
-  autoSaveDisabled = false;
-  consecutiveFailures = 0;
-  
-  // Clear any pending auto-save timer to start fresh
-  if (autoSaveTimer) {
-    clearTimeout(autoSaveTimer);
-    autoSaveTimer = null;
-  }
-}
-
-// Get auto-save status
-export function getAutoSaveStatus(): { disabled: boolean; failures: number; maxFailures: number } {
-  return {
-    disabled: autoSaveDisabled,
-    failures: consecutiveFailures,
-    maxFailures: MAX_CONSECUTIVE_FAILURES
-  };
 }
 
 export function createNewSong(name: string = 'New Song'): Song {
@@ -350,9 +152,6 @@ export function updateSongBpm(song: Song, bpm: number): Song {
 export function saveCurrentSong(songId: string | null): void {
   if (songId) {
     localStorage.setItem(CURRENT_SONG_KEY, songId);
-    // Update last opened timestamp for the song
-    const lastOpenedKey = `chordbook-song-last-opened-${songId}`;
-    localStorage.setItem(lastOpenedKey, new Date().toISOString());
   } else {
     localStorage.removeItem(CURRENT_SONG_KEY);
   }
@@ -360,32 +159,6 @@ export function saveCurrentSong(songId: string | null): void {
 
 export function loadCurrentSong(): string | null {
   return localStorage.getItem(CURRENT_SONG_KEY);
-}
-
-// Get songs sorted by last opened (most recent first)
-export function getSongsByLastOpened(songs: Song[]): Song[] {
-  return songs.sort((a, b) => {
-    const aLastOpened = localStorage.getItem(`chordbook-song-last-opened-${a.id}`);
-    const bLastOpened = localStorage.getItem(`chordbook-song-last-opened-${b.id}`);
-    
-    // If neither has been opened, sort by creation date (newest first)
-    if (!aLastOpened && !bLastOpened) {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    }
-    
-    // If only one has been opened, prioritize the opened one
-    if (!aLastOpened) return 1;
-    if (!bLastOpened) return -1;
-    
-    // Both have been opened, sort by last opened timestamp (newest first)
-    return new Date(bLastOpened).getTime() - new Date(aLastOpened).getTime();
-  });
-}
-
-// Get the N most recently opened songs
-export function getRecentlyOpenedSongs(songs: Song[], limit: number = 4): Song[] {
-  const sortedSongs = getSongsByLastOpened(songs);
-  return sortedSongs.slice(0, limit);
 }
 
 // Migration function to convert old progressions to songs
@@ -455,115 +228,4 @@ export function updateProgressionBpm(song: Song, progressionId: string, bpm: num
     progressions: updatedProgressions,
     updatedAt: new Date()
   };
-}
-
-// Data recovery functions
-export function recoverSongsFromIndividualFiles(): Song[] {
-  const recoveredSongs: Song[] = [];
-  
-  try {
-    // Scan localStorage for individual song files
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('chordbook-song-')) {
-        try {
-          const songData = localStorage.getItem(key);
-          if (songData) {
-            const savedSong: SavedSong = JSON.parse(songData);
-            recoveredSongs.push(deserializeSong(savedSong));
-          }
-        } catch (error) {
-          console.warn(`Failed to recover song from ${key}:`, error);
-        }
-      }
-    }
-    
-    console.log(`Recovered ${recoveredSongs.length} songs from individual files`);
-  } catch (error) {
-    console.error('Error during song recovery:', error);
-  }
-  
-  return recoveredSongs;
-}
-
-export function restoreFromBackup(): Song[] {
-  try {
-    const backup = localStorage.getItem(BACKUP_STORAGE_KEY);
-    if (backup) {
-      const savedSongs: SavedSong[] = JSON.parse(backup);
-      console.log('Restored songs from backup');
-      return savedSongs.map(deserializeSong);
-    }
-  } catch (error) {
-    console.error('Error restoring from backup:', error);
-  }
-  return [];
-}
-
-// Enhanced load with recovery capabilities
-export function loadSongsWithRecovery(): Song[] {
-  console.log('🔧 loadSongsWithRecovery called');
-  try {
-    // Try normal load first
-    console.log('🔧 Attempting normal load...');
-    const songs = loadSongs();
-    console.log('🔧 Normal load returned:', songs.length, 'songs');
-    if (songs.length > 0) {
-      return songs;
-    }
-    
-    // Try individual file recovery
-    console.log('🔧 Attempting individual file recovery...');
-    const recoveredSongs = recoverSongsFromIndividualFiles();
-    console.log('🔧 Individual file recovery returned:', recoveredSongs.length, 'songs');
-    if (recoveredSongs.length > 0) {
-      console.log('🔧 Recovered songs from individual files, saving to main storage');
-      saveSongs(recoveredSongs);
-      return recoveredSongs;
-    }
-    
-    // Try backup recovery
-    console.log('🔧 Attempting backup recovery...');
-    const backupSongs = restoreFromBackup();
-    console.log('🔧 Backup recovery returned:', backupSongs.length, 'songs');
-    if (backupSongs.length > 0) {
-      console.log('🔧 Recovered songs from backup, saving to main storage');
-      saveSongs(backupSongs);
-      return backupSongs;
-    }
-    
-  } catch (error) {
-    console.error('🔧 Error during song loading with recovery:', error);
-  }
-  
-  console.log('🔧 No songs found or recovered, returning empty array');
-  return [];
-}
-
-// Clean up old individual song files (call periodically)
-export function cleanupOldSongFiles(currentSongs: Song[]): void {
-  try {
-    const currentSongIds = new Set(currentSongs.map(s => s.id));
-    const keysToRemove: string[] = [];
-    
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('chordbook-song-')) {
-        const songId = key.replace('chordbook-song-', '');
-        if (!currentSongIds.has(songId)) {
-          keysToRemove.push(key);
-        }
-      }
-    }
-    
-    keysToRemove.forEach(key => {
-      localStorage.removeItem(key);
-    });
-    
-    if (keysToRemove.length > 0) {
-      console.log(`Cleaned up ${keysToRemove.length} orphaned song files`);
-    }
-  } catch (error) {
-    console.error('Error during cleanup:', error);
-  }
 }

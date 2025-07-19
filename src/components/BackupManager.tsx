@@ -6,11 +6,10 @@ import {
   loadBackupFromLocalStorage,
   restoreFromBackup,
   importBackupFromJSON,
-  performAutoBackup
+  performAutoBackup,
+  getAutoSaveStatus,
+  reenableAutoSave
 } from '../lib/backupService';
-import { getAutoSaveStatus, reenableAutoSave } from '../lib/songStorage';
-import { capoRateLimiter } from '../lib/capoRateLimit';
-import StorageStats from './StorageStats';
 
 interface BackupManagerProps {
   onDataRestored?: () => void;
@@ -22,19 +21,11 @@ export default function BackupManager({ onDataRestored }: BackupManagerProps) {
   const [isRestoring, setIsRestoring] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [autoSaveStatus, setAutoSaveStatus] = useState(getAutoSaveStatus());
-  const [rateLimiterStatus, setRateLimiterStatus] = useState(capoRateLimiter.getStatus());
 
   useEffect(() => {
     // Load initial backup info
     const info = getBackupInfo();
     setBackupInfo(info);
-
-    // Set up status monitoring
-    const statusInterval = setInterval(() => {
-      setAutoSaveStatus(getAutoSaveStatus());
-      setRateLimiterStatus(capoRateLimiter.getStatus());
-    }, 2000);
 
     // Set up auto-backup every 5 minutes
     const autoBackupInterval = setInterval(() => {
@@ -44,21 +35,8 @@ export default function BackupManager({ onDataRestored }: BackupManagerProps) {
       setBackupInfo(updatedInfo);
     }, 5 * 60 * 1000); // 5 minutes
 
-    return () => {
-      clearInterval(statusInterval);
-      clearInterval(autoBackupInterval);
-    };
+    return () => clearInterval(autoBackupInterval);
   }, []);
-
-  const handleReenableAutoSave = () => {
-    reenableAutoSave();
-    capoRateLimiter.clear();
-    setAutoSaveStatus(getAutoSaveStatus());
-    setRateLimiterStatus(capoRateLimiter.getStatus());
-    
-    // Show temporary success message
-    console.log('✅ Auto-save re-enabled by user');
-  };
 
   const handleCreateFullBackup = async () => {
     setIsCreatingBackup(true);
@@ -277,70 +255,6 @@ export default function BackupManager({ onDataRestored }: BackupManagerProps) {
           </div>
         </div>
       )}
-      
-      {/* Auto-Save Status */}
-      {(autoSaveStatus.disabled || rateLimiterStatus.queueLength > 0) && (
-        <div className="mt-6 p-4 border border-gray-200 rounded-md bg-gray-50">
-          <h4 className="font-medium text-gray-900 mb-3">Auto-Save Status</h4>
-          
-          {autoSaveStatus.disabled && (
-            <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md">
-              <div className="flex items-center">
-                <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                <div className="flex-1">
-                  <strong className="block">Auto-save disabled</strong>
-                  <p className="text-sm mt-1">
-                    {autoSaveStatus.maxFailures} consecutive failures detected. File saving operations are temporarily disabled.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleReenableAutoSave}
-                className="mt-3 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
-                title="Reset failure counter and re-enable automatic saving"
-              >
-                🔄 Reset & Re-enable Auto-save
-              </button>
-            </div>
-          )}
-
-          {rateLimiterStatus.queueLength > 0 && (
-            <div className="p-3 bg-blue-50 border border-blue-200 text-blue-700 rounded-md">
-              <div className="flex items-center">
-                <svg className="w-4 h-4 mr-2 animate-spin flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                </svg>
-                <div className="flex-1">
-                  <strong className="block">Capo changes queued</strong>
-                  <p className="text-sm mt-1">
-                    {rateLimiterStatus.queueLength} operation(s) pending - changes are being processed gradually to prevent performance issues.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {!autoSaveStatus.disabled && rateLimiterStatus.queueLength === 0 && (
-            <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-md">
-              <div className="flex items-center">
-                <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                <div>
-                  <strong>Auto-save operational</strong>
-                  <p className="text-sm mt-1">
-                    Your data is being saved automatically every few seconds.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      
-      <StorageStats />
     </div>
   );
 }

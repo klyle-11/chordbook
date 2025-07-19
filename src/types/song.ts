@@ -19,9 +19,10 @@ export interface Song {
   bpm: number;
   createdAt: Date;
   updatedAt: Date;
+  lastOpened?: Date; // Track when song was last opened
 }
 
-export interface SavedSong extends Omit<Song, 'createdAt' | 'updatedAt' | 'progressions' | 'tuning' | 'capoSettings'> {
+export interface SavedSong extends Omit<Song, 'createdAt' | 'updatedAt' | 'lastOpened' | 'progressions' | 'tuning' | 'capoSettings'> {
   progressions: Array<Omit<NamedProgression, 'createdAt' | 'updatedAt'> & {
     createdAt: string;
     updatedAt: string;
@@ -30,4 +31,5 @@ export interface SavedSong extends Omit<Song, 'createdAt' | 'updatedAt' | 'progr
   capoSettings: CapoSettings;
   createdAt: string;
   updatedAt: string;
+  lastOpened?: string; // String representation of lastOpened date
 }

@@ -4,6 +4,10 @@ import type { Song } from '../types/song';
  * Get all unique notes from all chords in all progressions of a song
  */
 export function getUniqueNotesFromSong(song: Song): string[] {
+  if (!song || !song.progressions) {
+    return [];
+  }
+  
   const allNotes = new Set<string>();
   
   // Iterate through all progressions in the song
