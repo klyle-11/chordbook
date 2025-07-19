@@ -6,9 +6,7 @@ import {
   loadBackupFromLocalStorage,
   restoreFromBackup,
   importBackupFromJSON,
-  performAutoBackup,
-  getAutoSaveStatus,
-  reenableAutoSave
+  performAutoBackup
 } from '../lib/backupService';
 
 interface BackupManagerProps {

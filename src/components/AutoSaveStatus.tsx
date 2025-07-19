@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getAutoSaveStatus, reenableAutoSave } from '../lib/songStorage';
+import { getAutoSaveStatus, reenableAutoSave } from "../lib/backupService";
 import { capoRateLimiter } from '../lib/capoRateLimit';
 
 function AutoSaveStatus() {
