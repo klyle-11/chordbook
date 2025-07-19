@@ -304,10 +304,13 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
             type="range"
             min="0"
             max="1"
-            step="0.1"
+            step="0.01"
             value={volume}
             onChange={handleVolumeChange}
-            className="w-20 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer slider accent-blue-500"
+            className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+            style={{
+              background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${volume * 100}%, #e5e7eb ${volume * 100}%, #e5e7eb 100%)`
+            }}
           />
           <span className="text-xs text-gray-500 w-8">
             {Math.round(volume * 100)}%

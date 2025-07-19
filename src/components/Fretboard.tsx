@@ -26,7 +26,7 @@ export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoar
                     </span>
                 )}
             </h3>
-            <div className="space-y-1 sm:space-y-2">
+            <div className="space-y-0.5 sm:space-y-1">
                 {strings.map((stringRoot, stringIndex) => {
                     const markers = chordNotes.flatMap((note) => 
                         getFretsForNoteOnString(stringRoot, note)
@@ -46,7 +46,7 @@ export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoar
                             </div>
                             
                             {/* String line with fret markers */}
-                            <div className="relative flex-1 h-5 sm:h-6 mx-1 sm:mx-2 flex items-center">
+                            <div className="relative flex-1 h-4 sm:h-5 mx-1 sm:mx-2 flex items-center">
                                 {/* String line */}
                                 <div className="absolute left-0 right-0 h-1 bg-gray-600 top-1/2 transform -translate-y-1/2"></div>
                                 
@@ -100,24 +100,32 @@ export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoar
                 <div className="w-6 sm:w-8"></div>
                 <div className="relative flex-1 mx-1 sm:mx-2">
                     <div className="relative h-3 sm:h-4">
-                        {fretPositions.map((position, fret) => (
-                            <div 
-                                key={fret}
-                                className={`absolute text-xs transform -translate-x-1/2 ${
-                                    !isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0)
-                                        ? 'text-gray-300 line-through'
-                                        : capoSettings.enabled && fret === capoSettings.fret
-                                        ? 'text-amber-600 font-bold'
-                                        : 'text-gray-500'
-                                }`}
-                                style={{ left: `${position}%` }}
-                            >
-                                {fret}
-                                {capoSettings.enabled && fret === capoSettings.fret && (
-                                    <div className="text-xs text-amber-600">C</div>
-                                )}
-                            </div>
-                        ))}
+                        {fretPositions.map((position, fret) => {
+                            // For fret 0, position at the nut (divider)
+                            // For other frets, position at the center between this fret and the previous one
+                            const labelPosition = fret === 0 
+                                ? position 
+                                : (fretPositions[fret - 1] + position) / 2;
+                            
+                            return (
+                                <div 
+                                    key={fret}
+                                    className={`absolute text-xs transform -translate-x-1/2 ${
+                                        !isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0)
+                                            ? 'text-gray-300 line-through'
+                                            : capoSettings.enabled && fret === capoSettings.fret
+                                            ? 'text-amber-600 font-bold'
+                                            : 'text-gray-500'
+                                    }`}
+                                    style={{ left: `${labelPosition}%` }}
+                                >
+                                    {fret}
+                                    {capoSettings.enabled && fret === capoSettings.fret && (
+                                        <div className="text-xs text-amber-600">C</div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
                 <div className="w-12 sm:w-20"></div>
