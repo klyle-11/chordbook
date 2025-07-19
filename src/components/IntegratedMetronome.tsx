@@ -8,11 +8,13 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const [bpm, setBpm] = useState(120);
+  const [bpmInput, setBpmInput] = useState('120'); // Separate state for input display
   const [volume, setVolume] = useState(0.5);
   
   // Metronome refs
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const bpmValidationTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Auto-scroll refs
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -34,7 +36,7 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
     onTempoChange?.(bpm);
   }, [bpm, onTempoChange]);
 
-  const playClick = () => {
+  const playClick = useCallback(() => {
     if (!audioContextRef.current) return;
 
     const context = audioContextRef.current;
@@ -53,9 +55,9 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
 
     oscillator.start(context.currentTime);
     oscillator.stop(context.currentTime + 0.1);
-  };
+  }, [volume]);
 
-  const startMetronome = () => {
+  const startMetronome = useCallback(() => {
     if (intervalRef.current) return;
 
     const interval = 60000 / bpm; // Convert BPM to milliseconds
@@ -66,15 +68,15 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
     }, interval);
 
     setIsPlaying(true);
-  };
+  }, [bpm, playClick]);
 
-  const stopMetronome = () => {
+  const stopMetronome = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
     setIsPlaying(false);
-  };
+  }, []);
 
   const startAutoScroll = useCallback(() => {
     if (scrollIntervalRef.current) return;
@@ -192,21 +194,25 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
       if (scrollIntervalRef.current) {
         clearInterval(scrollIntervalRef.current);
       }
+      if (bpmValidationTimerRef.current) {
+        clearTimeout(bpmValidationTimerRef.current);
+      }
     };
   }, [isScrolling, startAutoScroll, stopAutoScroll]);
 
-  const handleBpmChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    
-    // Allow empty input while typing
+  const validateAndSetBpm = useCallback((value: string) => {
     if (value === '') {
-      setBpm(120); // Default value when empty
+      setBpm(120);
+      setBpmInput('120');
       return;
     }
     
     const newBpm = parseInt(value, 10);
-    if (!isNaN(newBpm) && newBpm >= 40 && newBpm <= 300) {
-      setBpm(newBpm);
+    if (!isNaN(newBpm)) {
+      // Clamp the value between 40 and 300
+      const clampedBpm = Math.max(40, Math.min(300, newBpm));
+      setBpm(clampedBpm);
+      setBpmInput(clampedBpm.toString());
       
       // If playing, restart with new tempo
       if (isPlaying) {
@@ -214,6 +220,33 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
         setTimeout(() => startMetronome(), 50);
       }
     }
+  }, [isPlaying, stopMetronome, startMetronome]);
+
+  const handleBpmChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // Update the input display immediately (allow any input while typing)
+    setBpmInput(value);
+    
+    // Clear any existing timer
+    if (bpmValidationTimerRef.current) {
+      clearTimeout(bpmValidationTimerRef.current);
+    }
+    
+    // Set a timer to validate after 3 seconds of no typing
+    bpmValidationTimerRef.current = setTimeout(() => {
+      validateAndSetBpm(value);
+    }, 3000);
+  };
+
+  const handleBpmBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Clear the timer since we're validating on blur
+    if (bpmValidationTimerRef.current) {
+      clearTimeout(bpmValidationTimerRef.current);
+    }
+    
+    // Validate immediately when user clicks away
+    validateAndSetBpm(e.target.value);
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -226,11 +259,7 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
         {/* Play/Stop Button */}
         <button
           onClick={isPlaying ? stopMetronome : startMetronome}
-          className={`px-4 py-2 rounded font-medium transition-colors ${
-            isPlaying
-              ? 'bg-blue-500 text-white hover:bg-blue-600'
-              : 'bg-gray-300 text-gray-700 hover:bg-gray-400 hover:text-white'
-          }`}
+          className="px-4 py-2 rounded font-medium transition-colors bg-gray-300 text-gray-700 hover:bg-gray-400 hover:text-white"
         >
           {isPlaying ? '⏸️' : '▶️'}
         </button>
@@ -238,11 +267,12 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
         {/* Auto Scroll Button */}
         <button
           onClick={isScrolling ? stopAutoScroll : startAutoScroll}
-          className={`text-sm transition-colors underline ${
+          className={`text-sm transition-all duration-200 underline ${
             isScrolling
-              ? 'text-red-600 hover:text-red-700 font-medium'
+              ? 'text-green-600 hover:text-green-700 font-medium shadow-[0_0_8px_rgba(34,197,94,0.6)] text-shadow'
               : 'text-gray-600 hover:text-gray-800'
           }`}
+          style={isScrolling ? { textShadow: '0 0 8px rgba(34, 197, 94, 0.8)' } : {}}
         >
           {isScrolling ? 'Stop' : 'Auto Scroll'}
         </button>
@@ -257,8 +287,9 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
             type="number"
             min="40"
             max="300"
-            value={bpm}
+            value={bpmInput}
             onChange={handleBpmChange}
+            onBlur={handleBpmBlur}
             className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -287,13 +318,6 @@ export function IntegratedMetronome({ onTempoChange }: IntegratedMetronomeProps)
         <div
           className={`w-4 h-4 rounded-full transition-colors duration-100 ${
             isPlaying ? 'bg-blue-400 animate-pulse' : 'bg-gray-300'
-          }`}
-        />
-
-        {/* Scroll Indicator */}
-        <div
-          className={`w-3 h-3 rounded-full transition-colors duration-200 ${
-            isScrolling ? 'bg-red-400 animate-pulse' : 'bg-gray-300'
           }`}
         />
 
