@@ -1,16 +1,59 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { isValidChord, getChordSuggestions, getNotesForChord, findChordByNotes } from '../lib/chordUtils';
 import { parseChordInput, addCustomChord } from '../lib/customChordLibrary';
 
 interface ChordFormProps {
     onAddChord: (chordName: string) => void;
+    onReplaceChord?: (chordName: string, progressionId: string, chordIndex: number) => void;
 }
 
-export default function ChordForm({ onAddChord }: ChordFormProps) {
+export interface ChordFormRef {
+  startReplaceMode: (progressionId: string, chordIndex: number, originalChord: string) => void;
+  resetForm: () => void;
+  scrollIntoView: (options?: ScrollIntoViewOptions) => void;
+}const ChordForm = forwardRef<ChordFormRef, ChordFormProps>(({ onAddChord, onReplaceChord }, ref) => {
     const [input, setInput] = useState("");
     const [error, setError] = useState("");
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [previewNotes, setPreviewNotes] = useState<string[]>([]);
+    const [replaceMode, setReplaceMode] = useState<{
+        progressionId: string;
+        chordIndex: number;
+        originalChord: string;
+    } | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+    const formRef = useRef<HTMLFormElement>(null);
+
+    useImperativeHandle(ref, () => ({
+        startReplaceMode: (progressionId: string, chordIndex: number, currentChordName: string) => {
+            setReplaceMode({
+                progressionId,
+                chordIndex,
+                originalChord: currentChordName
+            });
+            setInput(currentChordName);
+            setError("");
+            setSuggestions([]);
+            setPreviewNotes([]);
+            // Focus the input field
+            setTimeout(() => {
+                inputRef.current?.focus();
+                inputRef.current?.select();
+            }, 100);
+        },
+        resetForm: () => {
+            setInput("");
+            setError("");
+            setSuggestions([]);
+            setPreviewNotes([]);
+            setReplaceMode(null);
+        },
+        scrollIntoView: (options?: ScrollIntoViewOptions) => {
+            if (formRef.current) {
+                formRef.current.scrollIntoView(options);
+            }
+        }
+    }));
 
     // Debounced effect to show chord preview after 1 second of no typing
     useEffect(() => {
@@ -63,21 +106,23 @@ export default function ChordForm({ onAddChord }: ChordFormProps) {
             const existingChord = findChordByNotes(notes);
             
             if (existingChord) {
-                // Add the existing chord instead of creating a custom one
-                onAddChord(existingChord);
-                setInput("");
-                setError("");
-                setSuggestions([]);
-                setPreviewNotes([]);
+                // Use the existing chord
+                if (replaceMode && onReplaceChord) {
+                    onReplaceChord(existingChord, replaceMode.progressionId, replaceMode.chordIndex);
+                } else {
+                    onAddChord(existingChord);
+                }
+                resetForm();
             } else {
                 // Try to add as custom chord since no existing chord matches
                 const success = addCustomChord(trimmedInput, notes);
                 if (success) {
-                    onAddChord(trimmedInput);
-                    setInput("");
-                    setError("");
-                    setSuggestions([]);
-                    setPreviewNotes([]);
+                    if (replaceMode && onReplaceChord) {
+                        onReplaceChord(trimmedInput, replaceMode.progressionId, replaceMode.chordIndex);
+                    } else {
+                        onAddChord(trimmedInput);
+                    }
+                    resetForm();
                 } else {
                     setError(`A chord with notes "${notes.join(", ")}" already exists in your library.`);
                     setSuggestions([]);
@@ -85,17 +130,30 @@ export default function ChordForm({ onAddChord }: ChordFormProps) {
                 }
             }
         } else if (isValidChord(trimmedInput)) {
-            onAddChord(trimmedInput);
-            setInput("");
-            setError("");
-            setSuggestions([]);
-            setPreviewNotes([]);
+            if (replaceMode && onReplaceChord) {
+                onReplaceChord(trimmedInput, replaceMode.progressionId, replaceMode.chordIndex);
+            } else {
+                onAddChord(trimmedInput);
+            }
+            resetForm();
         } else {
             const chordSuggestions = getChordSuggestions(trimmedInput);
             setError(`"${trimmedInput}" is not in the library yet.`);
             setSuggestions(chordSuggestions);
             setPreviewNotes([]);
         }
+    }
+
+    function resetForm() {
+        setInput("");
+        setError("");
+        setSuggestions([]);
+        setPreviewNotes([]);
+        setReplaceMode(null);
+    }
+
+    function cancelReplace() {
+        resetForm();
     }
 
     function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -174,31 +232,73 @@ export default function ChordForm({ onAddChord }: ChordFormProps) {
     const { isCustomChord, notes } = parseChordInput(input.trim());
     const existingChord = isCustomChord ? findChordByNotes(notes) : null;
     
+    
     const getButtonText = () => {
-        if (isCustomChord && existingChord) {
-            return `Add ${existingChord}`;
-        } else if (isCustomChord) {
-            return "Add Custom";
+        if (replaceMode) {
+            if (isCustomChord && existingChord) {
+                return `Replace with ${existingChord}`;
+            } else if (isCustomChord) {
+                return "Replace with Custom";
+            } else {
+                return "Replace Chord";
+            }
         } else {
-            return "Add Chord";
+            if (isCustomChord && existingChord) {
+                return `Add ${existingChord}`;
+            } else if (isCustomChord) {
+                return "Add Custom";
+            } else {
+                return "Add Chord";
+            }
         }
     };
 
     return (
         <div className="mb-4">
-            <form onSubmit={handleSubmit} className="flex space-x-2">
+            {replaceMode && (
+                <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                    <div className="flex items-center justify-between">
+                        <p className="text-blue-700 text-sm">
+                            <span className="font-medium">Replace mode:</span> Replacing "{replaceMode.originalChord}" at position {replaceMode.chordIndex + 1}
+                        </p>
+                        <button
+                            onClick={cancelReplace}
+                            className="text-blue-600 hover:text-blue-800 text-xs underline"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
+            
+            <form ref={formRef} onSubmit={handleSubmit} className="flex space-x-2">
                 <input
+                    ref={inputRef}
                     type="text"
                     value={input}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     onClick={handleClick}
-                    placeholder="Enter chord name (e.g., C6) or custom chord [C, E, G]"
+                    placeholder={replaceMode ? `Replace "${replaceMode.originalChord}" with...` : "Enter chord name (e.g., C6) or custom chord [C, E, G]"}
                     className="p-2 border border-gray-300 rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <button type="submit" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button 
+                    type="submit" 
+                    className={`px-4 py-2 text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        replaceMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-500 hover:bg-blue-600'
+                    }`}
+                >
                     {getButtonText()}
                 </button>
+                {replaceMode && (
+                    <button
+                        type="button"
+                        onClick={cancelReplace}
+                        className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    >
+                        Cancel
+                    </button>
+                )}
             </form>
             
             {/* Chord preview */}
@@ -245,10 +345,17 @@ export default function ChordForm({ onAddChord }: ChordFormProps) {
             {!error && (
                 <div className="mt-1">
                     <p className="text-xs text-gray-500">
-                        Tip: Create custom chords by typing notes in brackets, e.g., [C, E, G, B♭]
+                        {replaceMode ? 
+                            `Replacing chord at position ${replaceMode.chordIndex + 1}. Enter a new chord or press Cancel to exit replace mode.` :
+                            "Tip: Create custom chords by typing notes in brackets, e.g., [C, E, G, B♭]"
+                        }
                     </p>
                 </div>
             )}
         </div>
     );
-}
+});
+
+ChordForm.displayName = 'ChordForm';
+
+export default ChordForm;

@@ -1,0 +1,220 @@
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import type { Song } from '../types/song';
+import { formatSongInfo } from './displayUtils';
+
+export interface PDFExportOptions {
+  includeScale: boolean;
+  includeTraditionalDiagrams: boolean;
+  includeFretboardDiagrams: boolean;
+  paperSize: 'a4' | 'letter';
+  orientation: 'portrait' | 'landscape';
+}
+
+export const DEFAULT_PDF_OPTIONS: PDFExportOptions = {
+  includeScale: true,
+  includeTraditionalDiagrams: true,
+  includeFretboardDiagrams: true,
+  paperSize: 'a4',
+  orientation: 'portrait'
+};
+
+export async function exportSongToPDF(
+  song: Song, 
+  options: PDFExportOptions = DEFAULT_PDF_OPTIONS
+): Promise<void> {
+  // Create PDF document
+  const pdf = new jsPDF({
+    orientation: options.orientation,
+    unit: 'mm',
+    format: options.paperSize
+  });
+
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 20;
+  let yPosition = margin;
+
+  // Set up fonts and colors
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(20);
+  pdf.setTextColor(40, 44, 52); // Dark gray
+
+  // Add title
+  pdf.text(song.name, margin, yPosition);
+  yPosition += 15;
+
+  // Add song info
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(12);
+  pdf.setTextColor(100, 116, 139); // Gray
+  
+  const songInfo = formatSongInfo(song.tuning, song.capoSettings, song.bpm);
+  pdf.text(`Song Info: ${songInfo}`, margin, yPosition);
+  yPosition += 10;
+  
+  const dateStr = song.updatedAt.toLocaleDateString();
+  pdf.text(`Last Updated: ${dateStr}`, margin, yPosition);
+  yPosition += 20;
+
+  // Add scale information if requested
+  if (options.includeScale) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(16);
+    pdf.setTextColor(40, 44, 52);
+    pdf.text('Scale Information', margin, yPosition);
+    yPosition += 15;
+    
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(11);
+    pdf.setTextColor(100, 116, 139);
+    
+    // Get tuning info
+    const tuningNotes = song.tuning.strings.map(s => `${s.note}${s.octave}`).join(' - ');
+    pdf.text(`Tuning: ${tuningNotes}`, margin, yPosition);
+    yPosition += 8;
+    
+    if (song.capoSettings.enabled && song.capoSettings.fret > 0) {
+      pdf.text(`Capo: Fret ${song.capoSettings.fret}`, margin, yPosition);
+      yPosition += 8;
+    }
+    
+    pdf.text(`Tempo: ${song.bpm} BPM`, margin, yPosition);
+    yPosition += 20;
+  }
+
+  // Add progressions
+  if (song.progressions.length > 0) {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(16);
+    pdf.setTextColor(40, 44, 52);
+    pdf.text('Chord Progressions', margin, yPosition);
+    yPosition += 15;
+
+    for (let i = 0; i < song.progressions.length; i++) {
+      const progression = song.progressions[i];
+      
+      // Check if we need a new page
+      if (yPosition > pageHeight - 60) {
+        pdf.addPage();
+        yPosition = margin;
+      }
+
+      // Progression title
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.setTextColor(40, 44, 52);
+      pdf.text(`${i + 1}. ${progression.name}`, margin, yPosition);
+      yPosition += 12;
+
+      // Progression info
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(11);
+      pdf.setTextColor(100, 116, 139);
+      
+      const chordNames = progression.chords.map(c => c.name).join(' - ');
+      pdf.text(`Chords: ${chordNames}`, margin + 5, yPosition);
+      yPosition += 8;
+      
+      const effectiveBpm = progression.bpm || song.bpm;
+      pdf.text(`BPM: ${effectiveBpm}${progression.bpm ? ' (custom)' : ''}`, margin + 5, yPosition);
+      yPosition += 15;
+
+      // Add chord information
+      if (progression.chords.length > 0) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(12);
+        pdf.setTextColor(40, 44, 52);
+        pdf.text('Chord Details:', margin + 10, yPosition);
+        yPosition += 10;
+
+        for (const chord of progression.chords) {
+          // Check if we need a new page
+          if (yPosition > pageHeight - 40) {
+            pdf.addPage();
+            yPosition = margin;
+          }
+
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(11);
+          pdf.setTextColor(59, 130, 246); // Blue
+          pdf.text(`${chord.name}:`, margin + 15, yPosition);
+          
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(100, 116, 139);
+          const notes = chord.notes.join(', ');
+          pdf.text(`Notes: ${notes}`, margin + 35, yPosition);
+          yPosition += 8;
+        }
+      }
+
+      yPosition += 15; // Space between progressions
+    }
+  }
+
+  // Add footer
+  const pageCount = pdf.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    pdf.setPage(i);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(156, 163, 175); // Light gray
+    
+    const footerText = `Generated by Chordbook - Page ${i} of ${pageCount}`;
+    const textWidth = pdf.getTextWidth(footerText);
+    pdf.text(footerText, pageWidth - textWidth - margin, pageHeight - 10);
+  }
+
+  // Download the PDF
+  const fileName = `${song.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_chordbook.pdf`;
+  pdf.save(fileName);
+}
+
+// Alternative method using HTML elements for better diagram rendering
+export async function exportSongToPDFWithDiagrams(
+  song: Song,
+  containerElement: HTMLElement,
+  options: PDFExportOptions = DEFAULT_PDF_OPTIONS
+): Promise<void> {
+  try {
+    // Create canvas from HTML element
+    const canvas = await html2canvas(containerElement, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      width: containerElement.offsetWidth,
+      height: containerElement.offsetHeight
+    });
+
+    // Create PDF
+    const pdf = new jsPDF({
+      orientation: options.orientation,
+      unit: 'px',
+      format: [canvas.width, canvas.height]
+    });
+
+    // Add the canvas as image to PDF
+    const imgData = canvas.toDataURL('image/png');
+    pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+
+    // Add additional pages if content is tall
+    if (canvas.height > pdf.internal.pageSize.getHeight()) {
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let yPosition = -pageHeight;
+
+      while (yPosition > -canvas.height) {
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, yPosition, canvas.width, canvas.height);
+        yPosition -= pageHeight;
+      }
+    }
+
+    // Download the PDF
+    const fileName = `${song.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_chordbook_diagrams.pdf`;
+    pdf.save(fileName);
+  } catch (error) {
+    console.error('Error generating PDF with diagrams:', error);
+    throw new Error('Failed to generate PDF with diagrams');
+  }
+}

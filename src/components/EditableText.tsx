@@ -5,15 +5,17 @@ interface EditableTextProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  autoFocus?: boolean;
 }
 
 export function EditableText({ 
   value, 
   onChange, 
   placeholder = "Click to edit...",
-  className = ""
+  className = "",
+  autoFocus = false
 }: EditableTextProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(autoFocus);
   const [editValue, setEditValue] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
 

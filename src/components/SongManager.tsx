@@ -3,10 +3,9 @@ import type { Song } from '../types/song';
 import { EditableText } from './EditableText';
 import { formatSongInfo } from '../lib/displayUtils';
 import { ChordIcons } from './ChordIcons';
-import { DEFAULT_TUNING, type Tuning, type CapoSettings } from '../lib/tunings';
+import { DEFAULT_TUNING } from '../lib/tunings';
 import { BpmInput } from './BpmInput';
-import TuningSelector from './TuningSelector';
-import { CapoSelector } from './CapoSelector';
+import PDFExportDialog from './PDFExportDialog';
 
 interface SongManagerProps {
   songs: Song[];
@@ -17,11 +16,6 @@ interface SongManagerProps {
   onUpdateSongBpm?: (songId: string, bpm: number) => void;
   onDeleteSong: (songId: string) => void;
   onBackToOverview: () => void;
-  // Tuning and capo props
-  currentTuning: Tuning;
-  capoSettings: CapoSettings;
-  onTuningChange: (tuning: Tuning) => void;
-  onCapoChange: (settings: CapoSettings) => void;
 }
 
 export default function SongManager({
@@ -32,15 +26,12 @@ export default function SongManager({
   onRenameSong,
   onUpdateSongBpm,
   onDeleteSong,
-  onBackToOverview,
-  currentTuning,
-  capoSettings,
-  onTuningChange,
-  onCapoChange
+  onBackToOverview
 }: SongManagerProps) {
   const [showNewSongForm, setShowNewSongForm] = useState(false);
   const [newSongName, setNewSongName] = useState('');
   const [songToDelete, setSongToDelete] = useState<string | null>(null);
+  const [showPDFExport, setShowPDFExport] = useState(false);
 
   const handleCreateSong = () => {
     if (newSongName.trim()) {
@@ -98,9 +89,11 @@ export default function SongManager({
                 placeholder="Song name..."
               />
               <div className="flex items-center gap-4 mt-1">
-                <p className="text-sm text-gray-600">
-                  {currentSong.progressions.length} progression{currentSong.progressions.length !== 1 ? 's' : ''}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-gray-600">
+                    {currentSong.progressions.length} progression{currentSong.progressions.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
                 {onUpdateSongBpm && (
                   <BpmInput
                     bpm={currentSong.bpm}
@@ -112,31 +105,26 @@ export default function SongManager({
             </div>
           </div>
           
-          <button
-            onClick={() => handleDeleteClick(currentSong.id)}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            Delete Song
-          </button>
-        </div>
-
-        {/* Tuning and Capo Controls for this song */}
-        <div className="flex gap-6 mt-4">
-          <div>
-            <TuningSelector 
-              currentTuning={currentTuning}
-              onTuningChange={onTuningChange}
-            />
-          </div>
-          
-          <div>
-            <CapoSelector
-              capoSettings={capoSettings}
-              onCapoChange={onCapoChange}
-            />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowPDFExport(true)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export PDF
+            </button>
+            
+            <button
+              onClick={() => handleDeleteClick(currentSong.id)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete Song
+            </button>
           </div>
         </div>
 
@@ -340,6 +328,15 @@ export default function SongManager({
             </div>
           </div>
         </div>
+      )}
+
+      {/* PDF Export Dialog */}
+      {currentSong && (
+        <PDFExportDialog
+          song={currentSong}
+          isOpen={showPDFExport}
+          onClose={() => setShowPDFExport(false)}
+        />
       )}
     </div>
   );

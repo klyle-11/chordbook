@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { NamedProgression } from '../types/song';
 import type { Tuning, CapoSettings } from '../lib/tunings';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -8,9 +8,9 @@ import { CSS } from '@dnd-kit/utilities';
 import SortableChordGrid from './SortableChordGrid';
 import { EditableText } from './EditableText';
 import { formatSongInfo } from '../lib/displayUtils';
-import { ChordIcons } from './ChordIcons';
+import { SortableChordIcons } from './SortableChordIcons';
+import { BpmInput } from './BpmInput';
 import ChordForm from './ChordForm';
-import { IntegratedMetronome } from './IntegratedMetronome';
 
 interface SortableProgressionItemProps {
   progression: NamedProgression;
@@ -26,6 +26,7 @@ interface SortableProgressionItemProps {
   tuning: Tuning;
   capoSettings: CapoSettings;
   songBpm: number;
+  isNewlyCreated?: boolean;
 }
 
 function SortableProgressionItem({ 
@@ -41,7 +42,8 @@ function SortableProgressionItem({
   onUpdateProgressionBpm,
   tuning, 
   capoSettings, 
-  songBpm 
+  songBpm,
+  isNewlyCreated = false
 }: SortableProgressionItemProps) {
   const {
     attributes,
@@ -59,7 +61,12 @@ function SortableProgressionItem({
   const effectiveBpm = progression.bpm || songBpm;
 
   return (
-    <div ref={setNodeRef} style={style} className="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className="bg-white rounded-lg shadow-sm border border-gray-200"
+      data-progression-id={progression.id}
+    >
       <div className="flex items-center p-4 gap-4">
         {/* Drag Handle */}
         <div
@@ -100,6 +107,7 @@ function SortableProgressionItem({
                 onChange={(value) => onEdit(progression.id, 'name', value)}
                 placeholder="Untitled Progression"
                 className="text-lg font-medium text-gray-800"
+                autoFocus={isNewlyCreated}
               />
               <span className="text-sm text-gray-500">
                 ({progression.chords.length} chord{progression.chords.length !== 1 ? 's' : ''})
@@ -112,26 +120,29 @@ function SortableProgressionItem({
               </span>
               
               {progression.chords.length > 0 && (
-                <ChordIcons chords={progression.chords} tuning={tuning} className="flex-shrink-0" />
+                <SortableChordIcons 
+                  chords={progression.chords} 
+                  tuning={tuning} 
+                  className="flex-shrink-0" 
+                  onReorder={(oldIndex, newIndex) => onChordReorder(progression.id, oldIndex, newIndex)}
+                />
               )}
             </div>
           </div>
 
-          {/* BPM Display (read-only) */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500">BPM:</span>
-            <span className="text-sm font-medium text-gray-700 min-w-[2rem] text-center">
-              {effectiveBpm}
-            </span>
+          {/* BPM Control */}
+          <div className="flex items-center gap-2 mr-4">
+            <BpmInput
+              bpm={effectiveBpm}
+              onChange={(bpm) => onUpdateProgressionBpm(progression.id, bpm)}
+              size="sm"
+              className="w-16"
+            />
           </div>
 
           {/* Delete Button */}
           <button
-            onClick={() => {
-              if (window.confirm(`Are you sure you want to delete the progression "${progression.name}"? This action cannot be undone.`)) {
-                onDelete(progression.id);
-              }
-            }}
+            onClick={() => onDelete(progression.id)}
             className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
             title="Delete progression"
           >
@@ -149,16 +160,6 @@ function SortableProgressionItem({
             <div className="mb-4">
               <ChordForm onAddChord={(chordName) => onAddChord(progression.id, chordName)} />
             </div>
-            
-            {/* Integrated Metronome for this progression */}
-            {progression.chords.length > 0 && (
-              <div className="mb-4">
-                <IntegratedMetronome 
-                  onTempoChange={(bpm) => onUpdateProgressionBpm(progression.id, bpm)} 
-                  currentBpm={effectiveBpm}
-                />
-              </div>
-            )}
             
             {/* Chord Grid */}
             <SortableChordGrid
@@ -182,13 +183,11 @@ interface SongProgressionsProps {
   onEditProgression: (progressionId: string, field: 'name', value: string) => void;
   onUpdateProgressionBpm: (progressionId: string, bpm: number) => void;
   onDeleteProgression: (progressionId: string) => void;
-  onCreateProgression: () => void; // Add new prop for creating progressions
-  onSelectProgression: (progressionId: string) => void;
-  currentProgressionId: string | null;
   onChordReorder: (progressionId: string, oldIndex: number, newIndex: number) => void;
   onChordReplace: (progressionId: string, chordIndex: number) => void;
   onChordRemove: (progressionId: string, chordIndex: number) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
+  onAddProgression?: () => void;
   tuning: Tuning;
   capoSettings: CapoSettings;
   bpm: number;
@@ -200,18 +199,52 @@ export default function SongProgressions({
   onEditProgression,
   onUpdateProgressionBpm,
   onDeleteProgression,
-  onCreateProgression,
-  onSelectProgression: _onSelectProgression, // For future use
   onChordReorder,
   onChordReplace,
   onChordRemove,
   onAddChord,
-  currentProgressionId: _currentProgressionId, // For future highlighting
+  onAddProgression,
   tuning,
   capoSettings,
   bpm
 }: SongProgressionsProps) {
   const [expandedProgressions, setExpandedProgressions] = useState<Set<string>>(new Set());
+  const [newlyCreatedProgression, setNewlyCreatedProgression] = useState<string | null>(null);
+  const progressionsRef = useRef<HTMLDivElement>(null);
+
+    // Auto-expand progressions that are newly created or when there's only one progression
+  useEffect(() => {
+    if (progressions.length === 1) {
+      // If there's only one progression, expand it (common when creating new songs)
+      setExpandedProgressions(new Set([progressions[0].id]));
+      setNewlyCreatedProgression(progressions[0].id);
+    } else if (progressions.length > 1) {
+      // Find progressions without chords (likely newly created)
+      const emptyProgressions = progressions.filter(p => p.chords.length === 0).map(p => p.id);
+      
+      if (emptyProgressions.length > 0) {
+        setExpandedProgressions(prev => {
+          const newSet = new Set(prev);
+          emptyProgressions.forEach(id => newSet.add(id));
+          return newSet;
+        });
+        // Set the most recently created empty progression for focus
+        if (emptyProgressions.length > 0) {
+          setNewlyCreatedProgression(emptyProgressions[0]);
+        }
+      }
+    }
+  }, [progressions]);
+
+  // Clear the newly created progression after it's been rendered
+  useEffect(() => {
+    if (newlyCreatedProgression) {
+      const timer = setTimeout(() => {
+        setNewlyCreatedProgression(null);
+      }, 1000); // Clear after 1 second
+      return () => clearTimeout(timer);
+    }
+  }, [newlyCreatedProgression]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -223,6 +256,33 @@ export default function SongProgressions({
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  const handleAddProgression = () => {
+    if (onAddProgression) {
+      onAddProgression();
+      // Scroll to the progressions section smoothly after a short delay to allow for rendering
+      setTimeout(() => {
+        if (progressionsRef.current) {
+          // Find the newly added progression (empty progression at the bottom)
+          const newProgressionElements = progressionsRef.current.querySelectorAll('[data-progression-id]');
+          if (newProgressionElements.length > 0) {
+            const lastProgression = newProgressionElements[newProgressionElements.length - 1] as HTMLElement;
+            lastProgression.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center',
+              inline: 'nearest'
+            });
+          } else {
+            // Fallback to scrolling to the progressions container
+            progressionsRef.current.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'start' 
+            });
+          }
+        }
+      }, 150); // Increased delay to ensure DOM updates
+    }
+  };
 
   const toggleExpanded = (progressionId: string) => {
     setExpandedProgressions(prev => {
@@ -247,58 +307,65 @@ export default function SongProgressions({
     }
   };
 
+  if (progressions.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500">No progressions in this song yet.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={progressionsRef}>
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-800">
-          Chord Progressions ({progressions.length})
-        </h3>
-        <button
-          onClick={onCreateProgression}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New Progression
-        </button>
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-medium text-gray-800">
+            Chord Progressions ({progressions.length})
+          </h3>
+          {onAddProgression && (
+            <button
+              onClick={handleAddProgression}
+              className="flex items-center justify-center w-5 h-5 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
+              title="Add new progression"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
-      {progressions.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No progressions in this song yet.</p>
-        </div>
-      ) : (
-        <DndContext 
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
+      <DndContext 
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext 
+          items={progressions.map(p => p.id)}
+          strategy={verticalListSortingStrategy}
         >
-          <SortableContext 
-            items={progressions.map(p => p.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {progressions.map((progression) => (
-              <SortableProgressionItem
-                key={progression.id}
-                progression={progression}
-                isExpanded={expandedProgressions.has(progression.id)}
-                onToggle={() => toggleExpanded(progression.id)}
-                onEdit={onEditProgression}
-                onDelete={onDeleteProgression}
-                onChordReorder={onChordReorder}
-                onChordReplace={onChordReplace}
-                onChordRemove={onChordRemove}
-                onAddChord={onAddChord}
-                onUpdateProgressionBpm={onUpdateProgressionBpm}
-                tuning={tuning}
-                capoSettings={capoSettings}
-                songBpm={bpm}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
-      )}
+          {progressions.map((progression) => (
+            <SortableProgressionItem
+              key={progression.id}
+              progression={progression}
+              isExpanded={expandedProgressions.has(progression.id)}
+              onToggle={() => toggleExpanded(progression.id)}
+              onEdit={onEditProgression}
+              onDelete={onDeleteProgression}
+              onChordReorder={onChordReorder}
+              onChordReplace={onChordReplace}
+              onChordRemove={onChordRemove}
+              onAddChord={onAddChord}
+              onUpdateProgressionBpm={onUpdateProgressionBpm}
+              tuning={tuning}
+              capoSettings={capoSettings}
+              songBpm={bpm}
+              isNewlyCreated={newlyCreatedProgression === progression.id}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }

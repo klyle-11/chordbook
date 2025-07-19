@@ -20,6 +20,9 @@ function AutoSaveStatus() {
     capoRateLimiter.clear();
     setStatus(getAutoSaveStatus());
     setRateLimiterStatus(capoRateLimiter.getStatus());
+    
+    // Show temporary success message
+    console.log('✅ Auto-save re-enabled by user');
   };
 
   if (!status.disabled && rateLimiterStatus.queueLength === 0) {
@@ -37,15 +40,16 @@ function AutoSaveStatus() {
             <div>
               <strong>Auto-save disabled</strong>
               <p className="text-sm">
-                {status.failures}/{status.maxFailures} failures detected
+                {status.maxFailures} consecutive failures detected
               </p>
             </div>
           </div>
           <button
             onClick={handleReenableAutoSave}
             className="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+            title="Reset failure counter and re-enable automatic saving"
           >
-            Re-enable Auto-save
+            🔄 Reset & Re-enable
           </button>
         </div>
       )}

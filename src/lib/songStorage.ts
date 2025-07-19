@@ -63,29 +63,40 @@ function deserializeSong(savedSong: SavedSong): Song {
 }
 
 export function loadSongs(): Song[] {
-  console.log('🔧 loadSongs called');
   try {
     const saved = localStorage.getItem(SONGS_STORAGE_KEY);
-    console.log('🔧 Retrieved from localStorage:', saved ? 'data found' : 'no data');
+    
     if (saved) {
-      const savedSongs: SavedSong[] = JSON.parse(saved);
-      console.log('🔧 Parsed saved songs:', savedSongs.length, 'songs');
-      const deserializedSongs = savedSongs.map(deserializeSong);
-      console.log('🔧 Deserialized songs:', deserializedSongs.map(s => s.name));
-      return deserializedSongs;
+      const parsedData = JSON.parse(saved);
+      
+      // Check if it's the new consolidated format
+      if (parsedData.version === '2.0' && parsedData.songs) {
+        const deserializedSongs = parsedData.songs.map(deserializeSong);
+        return deserializedSongs;
+      } 
+      // Legacy format - direct array
+      else if (Array.isArray(parsedData)) {
+        const deserializedSongs = parsedData.map(deserializeSong);
+        return deserializedSongs;
+      }
     }
+    
+    return [];
   } catch (error) {
-    console.error('🔧 Error loading songs:', error);
+    console.error('Failed to load songs:', error);
+    return [];
   }
-  return [];
 }
 
 export function saveSongs(songs: Song[]): void {
-  console.log('🔧 saveSongs called with:', songs.length, 'songs');
-  
   // Check if auto-save is disabled due to previous failures
   if (autoSaveDisabled) {
-    console.warn('🚫 Auto-save disabled due to repeated failures');
+    console.warn('🚫 Auto-save disabled due to repeated failures. Use reenableAutoSave() to re-enable.');
+    return;
+  }
+  
+  // Don't fail if there are no songs to save
+  if (songs.length === 0) {
     return;
   }
 
@@ -93,38 +104,87 @@ export function saveSongs(songs: Song[]): void {
     // Create backup before saving
     const currentData = localStorage.getItem(SONGS_STORAGE_KEY);
     if (currentData) {
-      console.log('🔧 Creating backup of current data');
-      localStorage.setItem(BACKUP_STORAGE_KEY, currentData);
+      try {
+        localStorage.setItem(BACKUP_STORAGE_KEY, currentData);
+      } catch (backupError) {
+        console.warn('🔧 Failed to create backup - storage might be full:', backupError);
+        // Continue without backup if storage is full
+      }
     }
     
     const serializedSongs = songs.map(serializeSong);
-    console.log('🔧 Serialized songs for storage:', serializedSongs.map(s => s.name));
-    localStorage.setItem(SONGS_STORAGE_KEY, JSON.stringify(serializedSongs));
-    console.log('🔧 Saved to localStorage with key:', SONGS_STORAGE_KEY);
     
-    // Save individual song files for better data recovery
-    songs.forEach(song => {
+    // Create consolidated data structure
+    const consolidatedData = {
+      version: '2.0',
+      saveType: 'localStorage-consolidated',
+      savedAt: new Date().toISOString(),
+      songCount: serializedSongs.length,
+      totalProgressions: serializedSongs.reduce((total: number, song) => total + (song.progressions?.length || 0), 0),
+      songs: serializedSongs
+    };
+    
+    try {
+      localStorage.setItem(SONGS_STORAGE_KEY, JSON.stringify(consolidatedData));
+      console.log('🔧 Saved to localStorage with consolidated format');
+    } catch (storageError) {
+      // Handle storage quota errors specifically
+      if (storageError instanceof DOMException && storageError.code === 22) {
+        console.error('🔧 Storage quota exceeded - attempting cleanup');
+        // Clean up old individual song files and other old data
+        const keys = Object.keys(localStorage);
+        const oldKeys = keys.filter(key => 
+          key.startsWith('chordbook-song-') || 
+          key.startsWith('chordbook-file-') ||
+          key.startsWith('chordbook-old-')
+        );
+        
+        oldKeys.forEach(key => {
+          try {
+            localStorage.removeItem(key);
+          } catch {
+            // Ignore cleanup errors
+          }
+        });
+        
+        // Try saving again after cleanup
+        localStorage.setItem(SONGS_STORAGE_KEY, JSON.stringify(consolidatedData));
+      } else {
+        throw storageError; // Re-throw non-quota errors
+      }
+    }
+    
+    // The data is already saved above, so we're done with the main save operation
+    // Clean up old individual song files from localStorage to save space
+    const oldSongKeys = Object.keys(localStorage).filter(key => key.startsWith('chordbook-song-'));
+    oldSongKeys.forEach(key => {
       try {
-        const songKey = `chordbook-song-${song.id}`;
-        localStorage.setItem(songKey, JSON.stringify(serializeSong(song)));
-        console.log('🔧 Saved individual song:', song.name, 'with key:', songKey);
-      } catch (error) {
-        console.warn(`Failed to save individual song ${song.id}:`, error);
+        localStorage.removeItem(key);
+      } catch {
+        // Ignore cleanup errors
       }
     });
     
-    // Only save to files if we haven't had too many failures
-    if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
+    // Only save to files if we haven't had too many failures AND we're in Electron environment
+    const isElectronEnv = typeof window !== 'undefined' && window.electronAPI;
+    if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES && isElectronEnv) {
       // Save to individual JSON files (async, don't block)
       saveSongsToFiles(songs).catch(error => {
-        consecutiveFailures++;
-        console.warn(`Failed to save songs to files (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
-        
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          console.error('🚫 Disabling file saves due to repeated failures');
-          autoSaveDisabled = true;
+        // Only increment if not already at max (prevent unbounded growth)
+        if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
+          consecutiveFailures++;
+          console.warn(`Failed to save songs to files (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
+          
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            console.error('🚫 Disabling file saves due to repeated failures');
+            autoSaveDisabled = true;
+          }
+        } else {
+          console.warn('File save failed but already at max failure count');
         }
       });
+    } else if (!isElectronEnv) {
+      console.log('🌐 Browser environment detected - skipping file save (localStorage only)');
     } else {
       console.log('🚫 Skipping file save due to previous failures');
     }
@@ -133,12 +193,17 @@ export function saveSongs(songs: Song[]): void {
     consecutiveFailures = 0;
     console.log(`🔧 Successfully saved ${songs.length} songs`);
   } catch (error) {
-    consecutiveFailures++;
-    console.error(`🔧 Critical error saving songs (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
-    
-    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-      console.error('🚫 Disabling auto-save due to repeated failures');
-      autoSaveDisabled = true;
+    // Only increment if not already at max (prevent unbounded growth)
+    if (consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
+      consecutiveFailures++;
+      console.error(`🔧 Critical error saving songs (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
+      
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        console.error('🚫 Disabling auto-save due to repeated failures');
+        autoSaveDisabled = true;
+      }
+    } else {
+      console.error('🔧 Critical error saving songs (already at max failures):', error);
     }
     
     // Try to recover from backup if available
@@ -177,9 +242,15 @@ export function forceSave(songs: Song[]): void {
 
 // Re-enable auto-save after failures
 export function reenableAutoSave(): void {
-  console.log('🔄 Re-enabling auto-save');
+  console.log('🔄 Re-enabling auto-save and resetting failure counters');
   autoSaveDisabled = false;
   consecutiveFailures = 0;
+  
+  // Clear any pending auto-save timer to start fresh
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+  }
 }
 
 // Get auto-save status

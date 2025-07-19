@@ -9,6 +9,65 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* PDF Export Print Styles */
+@media print {
+  .page-break-before {
+    page-break-before: always;
+  }
+  
+  .page-break-after {
+    page-break-after: always;
+  }
+  
+  .page-break-inside-avoid {
+    page-break-inside: avoid;
+  }
+  
+  .print-hidden {
+    display: none !important;
+  }
+  
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+/* PDF Export specific styles */
+.pdf-export-content {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.6;
+}
+
+.pdf-export-content h1 {
+  color: #1a202c !important;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.pdf-export-content h2 {
+  color: #2d3748 !important;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.pdf-export-content h3,
+.pdf-export-content h4,
+.pdf-export-content h5 {
+  color: #4a5568 !important;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 /* Define custom font families */
 .font-sans {
   font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', 'Oxygen',

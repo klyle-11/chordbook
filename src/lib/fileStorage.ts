@@ -16,11 +16,6 @@ const isElectron = () => {
   return typeof window !== 'undefined' && window.electronAPI;
 };
 
-// Check if we're in browser environment with File System Access API
-const hasFileSystemAccess = () => {
-  return typeof window !== 'undefined' && 'showDirectoryPicker' in window;
-};
-
 // Get storage directory path (Electron only)
 const getStorageDirectory = async (): Promise<string | null> => {
   if (isElectron() && window.electronAPI?.getStorageDir) {
@@ -50,8 +45,8 @@ const getSongFileName = (song: Song): string => {
   return `song_${song.id}_${sanitizedName}.json`;
 };
 
-// Save individual song to file (Electron)
-const saveSongToFileElectron = async (song: Song): Promise<boolean> => {
+// Save all songs to a single consolidated JSON file (Electron)
+const saveAllSongsToFile = async (songs: Song[]): Promise<boolean> => {
   try {
     if (!isElectron() || !window.electronAPI?.saveFile) {
       return false;
@@ -72,38 +67,73 @@ const saveSongToFileElectron = async (song: Song): Promise<boolean> => {
       return new Date(date).toISOString();
     };
 
-    const fileName = getSongFileName(song);
+    const fileName = 'chordbook-songs-consolidated.json';
     const filePath = `${storageDir}/${fileName}`;
     
-    // Safely serialize the song data
-    const songData = {
-      ...song,
-      progressions: song.progressions.map(p => ({
-        ...p,
-        createdAt: safeToISOString(p.createdAt),
-        updatedAt: safeToISOString(p.updatedAt)
-      })),
-      createdAt: safeToISOString(song.createdAt),
-      updatedAt: safeToISOString(song.updatedAt),
+    // Create consolidated data structure with metadata
+    const consolidatedData = {
+      version: '2.0',
+      saveType: 'consolidated',
       savedAt: new Date().toISOString(),
-      version: '1.0'
+      songCount: songs.length,
+      totalProgressions: songs.reduce((total, song) => total + (song.progressions?.length || 0), 0),
+      songs: songs.map(song => ({
+        ...song,
+        progressions: song.progressions.map(p => ({
+          ...p,
+          createdAt: safeToISOString(p.createdAt),
+          updatedAt: safeToISOString(p.updatedAt)
+        })),
+        createdAt: safeToISOString(song.createdAt),
+        updatedAt: safeToISOString(song.updatedAt)
+      }))
     };
     
-    const jsonData = compressJSON(songData);
+    const jsonData = compressJSON(consolidatedData);
 
     const success = await window.electronAPI.saveFile(filePath, jsonData);
     if (success) {
-      logger.debug(`Song "${song.name}" saved to file: ${fileName}`);
+      logger.debug(`All songs saved to consolidated file: ${fileName} (${songs.length} songs)`);
+      
+      // Clean up old individual song files after successful consolidated save
+      await cleanupIndividualSongFiles(songs);
     }
     return success;
   } catch (error) {
-    logger.error('Error saving song to file:', error);
+    logger.error('Error saving songs to consolidated file:', error);
     return false;
   }
 };
 
-// Save individual song to browser storage
-const saveSongToFileWeb = async (song: Song, directoryHandle?: FileSystemDirectoryHandle): Promise<boolean> => {
+// Clean up old individual song files after consolidation
+const cleanupIndividualSongFiles = async (songs: Song[]): Promise<void> => {
+  try {
+    if (!isElectron() || !window.electronAPI?.deleteFile) {
+      return;
+    }
+
+    const storageDir = await getStorageDirectory();
+    if (!storageDir) return;
+
+    // Delete old individual song files
+    for (const song of songs) {
+      try {
+        const oldFileName = getSongFileName(song);
+        const oldFilePath = `${storageDir}/${oldFileName}`;
+        await window.electronAPI.deleteFile(oldFilePath);
+        logger.debug(`Cleaned up old song file: ${oldFileName}`);
+      } catch (error) {
+        // Ignore cleanup errors for individual files
+        logger.debug(`Could not clean up old song file for ${song.name}:`, error);
+      }
+    }
+  } catch (error) {
+    logger.error('Error during individual song file cleanup:', error);
+  }
+};
+
+// Save all songs to consolidated web storage
+const saveSongsToFileWeb = async (songs: Song[]): Promise<boolean> => {
   try {
     // Helper function to safely convert to ISO string
     const safeToISOString = (date: Date | string): string => {
@@ -117,46 +147,38 @@ const saveSongToFileWeb = async (song: Song, directoryHandle?: FileSystemDirecto
       return new Date(date).toISOString();
     };
 
-    const songData = {
-      ...song,
-      progressions: song.progressions.map(p => ({
-        ...p,
-        createdAt: safeToISOString(p.createdAt),
-        updatedAt: safeToISOString(p.updatedAt)
-      })),
-      createdAt: safeToISOString(song.createdAt),
-      updatedAt: safeToISOString(song.updatedAt),
+    // Create consolidated data structure for web storage
+    const consolidatedData = {
+      version: '2.0',
+      saveType: 'consolidated-web',
       savedAt: new Date().toISOString(),
-      version: '1.0'
+      songCount: songs.length,
+      totalProgressions: songs.reduce((total, song) => total + (song.progressions?.length || 0), 0),
+      songs: songs.map(song => ({
+        ...song,
+        progressions: song.progressions.map(p => ({
+          ...p,
+          createdAt: safeToISOString(p.createdAt),
+          updatedAt: safeToISOString(p.updatedAt)
+        })),
+        createdAt: safeToISOString(song.createdAt),
+        updatedAt: safeToISOString(song.updatedAt)
+      }))
     };
 
-    if (!directoryHandle) {
-      // Use localStorage as fallback for web
-      const jsonData = compressJSON(songData);
-      
-      localStorage.setItem(`chordbook-file-${song.id}`, jsonData);
-      logger.debug(`Song "${song.name}" saved to localStorage file cache`);
-      return true;
-    }
-
-    // Use File System Access API if available
-    if (hasFileSystemAccess()) {
-      const fileName = getSongFileName(song);
-      const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
-      const writable = await fileHandle.createWritable();
-      
-      const jsonData = compressJSON(songData);
-      
-      await writable.write(jsonData);
-      await writable.close();
-      
-      logger.debug(`Song "${song.name}" saved to file: ${fileName}`);
-      return true;
-    }
-
-    return false;
+    const jsonData = compressJSON(consolidatedData);
+    
+    // Save to localStorage with consolidated key
+    localStorage.setItem('chordbook-songs-consolidated-file', jsonData);
+    
+    // Clean up old individual file entries from localStorage
+    const oldKeys = Object.keys(localStorage).filter(key => key.startsWith('chordbook-file-'));
+    oldKeys.forEach(key => localStorage.removeItem(key));
+    
+    logger.debug(`All songs saved to consolidated web storage (${songs.length} songs)`);
+    return true;
   } catch (error) {
-    logger.error('Error saving song to web file:', error);
+    logger.error('Error saving songs to consolidated web storage:', error);
     return false;
   }
 };
@@ -290,39 +312,28 @@ export const saveSongsToFiles = async (songs: Song[]): Promise<void> => {
     // Also save to localStorage for compatibility
     saveToLocalStorage(songs);
 
-    // Process songs sequentially to prevent file descriptor exhaustion
-    let successCount = 0;
+    // Use consolidated file approach for better storage efficiency
+    const success = await saveAllSongsToFile(songs);
     
-    for (const song of songs) {
-      try {
-        let result = false;
-        if (isElectron()) {
-          result = await saveSongToFileElectron(song);
-        } else {
-          result = await saveSongToFileWeb(song);
-        }
-        
-        if (result) {
-          successCount++;
-        }
-        
-        // Small delay between saves to prevent overwhelming the system
-        if (songs.length > 10) {
-          await new Promise(resolve => setTimeout(resolve, 5));
-        }
-      } catch (error) {
-        logger.error(`Error saving individual song ${song.name}:`, error);
+    if (success) {
+      logger.infoThrottled('consolidated-save', `Saved ${songs.length} songs to consolidated file`);
+    } else {
+      // Fallback to web storage if Electron save fails
+      if (!isElectron()) {
+        await saveSongsToFileWeb(songs);
+        logger.infoThrottled('web-save', `Saved ${songs.length} songs to web storage`);
+      } else {
+        throw new Error('Failed to save songs to consolidated file');
       }
     }
-    
-    logger.infoThrottled('batch-save', `Saved ${successCount}/${songs.length} songs to individual files`);
 
-    // Cleanup old files if needed
-    if (songs.length > 0) {
+    // Cleanup old files if needed (but only after successful save)
+    if (success && songs.length > 0) {
       await cleanupOldFiles();
     }
   } catch (error) {
     logger.error('Error saving songs to files:', error);
+    throw error; // Re-throw to trigger failure handling in calling code
   }
 };
 
@@ -335,6 +346,44 @@ export const loadSongsFromFiles = async (): Promise<Song[]> => {
       const storageDir = await getStorageDirectory();
       if (storageDir) {
         const files = await window.electronAPI.listFiles(storageDir);
+        
+        // First try to load from consolidated file
+        const consolidatedFile = files?.find((file: string) => file === 'chordbook-songs-consolidated.json');
+        
+        if (consolidatedFile) {
+          try {
+            const filePath = `${storageDir}/${consolidatedFile}`;
+            const fileContent = await window.electronAPI.readFile(filePath);
+            
+            if (fileContent) {
+              const consolidatedData = decompressJSON(fileContent) as any;
+              
+              // Handle consolidated format
+              if (consolidatedData.songs && Array.isArray(consolidatedData.songs)) {
+                for (const songData of consolidatedData.songs) {
+                  const song: Song = {
+                    ...songData,
+                    createdAt: new Date(songData.createdAt),
+                    updatedAt: new Date(songData.updatedAt),
+                    progressions: songData.progressions.map((p: any) => ({
+                      ...p,
+                      createdAt: new Date(p.createdAt),
+                      updatedAt: new Date(p.updatedAt)
+                    }))
+                  };
+                  songs.push(song);
+                }
+                
+                logger.debug(`Loaded ${songs.length} songs from consolidated file`);
+                return songs; // Return early if consolidated load successful
+              }
+            }
+          } catch (error) {
+            logger.error('Error loading from consolidated file, trying individual files:', error);
+          }
+        }
+        
+        // Fallback to individual files if consolidated file doesn't exist or fails
         const songFiles = files?.filter((file: string) => file.startsWith('song_') && file.endsWith('.json')) || [];
 
         for (const file of songFiles) {
@@ -346,7 +395,37 @@ export const loadSongsFromFiles = async (): Promise<Song[]> => {
         }
       }
     } else {
-      // Web version - load from localStorage file cache
+      // Web version - first try consolidated storage, then fallback to individual files
+      try {
+        const consolidatedData = localStorage.getItem('chordbook-songs-consolidated-file');
+        
+        if (consolidatedData) {
+          const parsedData = decompressJSON(consolidatedData) as any;
+          
+          if (parsedData.songs && Array.isArray(parsedData.songs)) {
+            for (const songData of parsedData.songs) {
+              const song: Song = {
+                ...songData,
+                createdAt: new Date(songData.createdAt),
+                updatedAt: new Date(songData.updatedAt),
+                progressions: songData.progressions.map((p: any) => ({
+                  ...p,
+                  createdAt: new Date(p.createdAt),
+                  updatedAt: new Date(p.updatedAt)
+                }))
+              };
+              songs.push(song);
+            }
+            
+            logger.debug(`Loaded ${songs.length} songs from consolidated web storage`);
+            return songs; // Return early if consolidated load successful
+          }
+        }
+      } catch (error) {
+        logger.error('Error loading from consolidated web storage, trying individual files:', error);
+      }
+      
+      // Fallback to individual localStorage files
       const keys = Object.keys(localStorage).filter(key => key.startsWith('chordbook-file-'));
       
       for (const key of keys) {
