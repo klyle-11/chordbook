@@ -237,6 +237,13 @@ export default function SongManager({
             </div>
           </div>
         )}
+
+        {/* PDF Export Dialog (visible while viewing a specific song) */}
+        <PDFExportDialog
+          song={currentSong}
+          isOpen={showPDFExport}
+          onClose={() => setShowPDFExport(false)}
+        />
       </div>
     );
   }
@@ -394,14 +401,7 @@ export default function SongManager({
         </div>
       )}
 
-      {/* PDF Export Dialog */}
-      {currentSong && (
-        <PDFExportDialog
-          song={currentSong}
-          isOpen={showPDFExport}
-          onClose={() => setShowPDFExport(false)}
-        />
-      )}
+  {/* PDF Export Dialog (not rendered on overview since no currentSong) */}
     </div>
   );
 }

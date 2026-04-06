@@ -1,10 +1,9 @@
-import type { Song, SavedSong, NamedProgression } from '../types/song';
-import type { Progression } from '../types/progression';
-import { DEFAULT_TUNING, type Tuning, type CapoSettings } from './tunings';
+import type { Song, NamedProgression } from '../types/song';
+import type { Tuning, CapoSettings } from './tunings';
+import { DEFAULT_TUNING } from './tunings';
+import { db } from './db';
 
-const SONGS_STORAGE_KEY = 'chordbook-songs';
-const CURRENT_SONG_KEY = 'chordbook-current-song';
-const MIGRATION_FLAG_KEY = 'chordbook-songs-migrated';
+const CURRENT_SONG_KEY = 'currentSongId';
 
 export function generateSongId(): string {
   return 'song-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -14,55 +13,132 @@ export function generateProgressionId(): string {
   return 'prog-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
-function serializeSong(song: Song): SavedSong {
-  return {
-    ...song,
-    progressions: song.progressions.map(p => ({
-      ...p,
-      createdAt: p.createdAt.toISOString(),
-      updatedAt: p.updatedAt.toISOString()
-    })),
-    createdAt: song.createdAt.toISOString(),
-    updatedAt: song.updatedAt.toISOString(),
-    lastOpened: song.lastOpened?.toISOString()
-  };
-}
+// --- Async DB-backed functions ---
 
-function deserializeSong(savedSong: SavedSong): Song {
-  return {
-    ...savedSong,
-    progressions: savedSong.progressions.map(p => ({
-      ...p,
-      createdAt: new Date(p.createdAt),
-      updatedAt: new Date(p.updatedAt)
-    })),
-    createdAt: new Date(savedSong.createdAt),
-    updatedAt: new Date(savedSong.updatedAt),
-    lastOpened: savedSong.lastOpened ? new Date(savedSong.lastOpened) : undefined
-  };
-}
-
-export function loadSongs(): Song[] {
+export async function loadSongsAsync(): Promise<Song[]> {
   try {
-    const saved = localStorage.getItem(SONGS_STORAGE_KEY);
-    if (saved) {
-      const savedSongs: SavedSong[] = JSON.parse(saved);
-      return savedSongs.map(deserializeSong);
+    return await db.songs.toArray();
+  } catch (error) {
+    console.error('Error loading songs from DB:', error);
+    return [];
+  }
+}
+
+export async function saveSongsAsync(songs: Song[]): Promise<void> {
+  try {
+    await db.transaction('rw', db.songs, async () => {
+      await db.songs.clear();
+      await db.songs.bulkPut(songs);
+    });
+  } catch (error) {
+    console.error('Error saving songs to DB:', error);
+  }
+}
+
+export async function saveSongAsync(song: Song): Promise<void> {
+  try {
+    await db.songs.put(song);
+  } catch (error) {
+    console.error('Error saving song to DB:', error);
+  }
+}
+
+export async function deleteSongAsync(songId: string): Promise<void> {
+  try {
+    await db.songs.delete(songId);
+  } catch (error) {
+    console.error('Error deleting song from DB:', error);
+  }
+}
+
+export async function saveCurrentSongAsync(songId: string | null): Promise<void> {
+  try {
+    if (songId) {
+      await db.appState.put({ key: CURRENT_SONG_KEY, value: songId });
+    } else {
+      await db.appState.delete(CURRENT_SONG_KEY);
     }
   } catch (error) {
-    console.error('Error loading songs:', error);
+    console.error('Error saving current song ID:', error);
   }
+}
+
+export async function loadCurrentSongAsync(): Promise<string | null> {
+  try {
+    const entry = await db.appState.get(CURRENT_SONG_KEY);
+    return entry?.value ?? null;
+  } catch (error) {
+    console.error('Error loading current song ID:', error);
+    return null;
+  }
+}
+
+// --- Sync wrappers (fire-and-forget saves for React state handlers) ---
+
+export function saveSongs(songs: Song[]): void {
+  saveSongsAsync(songs);
+}
+
+export function saveCurrentSong(songId: string | null): void {
+  saveCurrentSongAsync(songId);
+}
+
+// These now return empty — callers must use async versions for initial load
+export function loadSongs(): Song[] {
+  console.warn('loadSongs() is synchronous and returns []. Use loadSongsAsync() instead.');
   return [];
 }
 
-export function saveSongs(songs: Song[]): void {
+export function loadCurrentSong(): string | null {
+  console.warn('loadCurrentSong() is synchronous and returns null. Use loadCurrentSongAsync() instead.');
+  return null;
+}
+
+// --- Migration: localStorage → IndexedDB ---
+
+const MIGRATION_DONE_KEY = 'chordbook-db-migrated';
+
+export async function migrateLocalStorageToDB(): Promise<boolean> {
   try {
-    const serializedSongs = songs.map(serializeSong);
-    localStorage.setItem(SONGS_STORAGE_KEY, JSON.stringify(serializedSongs));
+    // Check if already migrated via appState
+    const migrated = await db.appState.get(MIGRATION_DONE_KEY);
+    if (migrated) return false;
+
+    const oldData = localStorage.getItem('chordbook-songs');
+    if (oldData) {
+      const parsed = JSON.parse(oldData);
+      const songs: Song[] = parsed.map((s: Record<string, unknown>) => ({
+        ...s,
+        createdAt: new Date(s.createdAt as string),
+        updatedAt: new Date(s.updatedAt as string),
+        lastOpened: s.lastOpened ? new Date(s.lastOpened as string) : undefined,
+        progressions: (s.progressions as Record<string, unknown>[]).map((p: Record<string, unknown>) => ({
+          ...p,
+          createdAt: new Date(p.createdAt as string),
+          updatedAt: new Date(p.updatedAt as string),
+        })),
+      }));
+
+      await db.songs.bulkPut(songs);
+      console.log(`Migrated ${songs.length} songs from localStorage to IndexedDB`);
+    }
+
+    // Migrate current song ID
+    const currentId = localStorage.getItem('chordbook-current-song');
+    if (currentId) {
+      await db.appState.put({ key: CURRENT_SONG_KEY, value: currentId });
+    }
+
+    // Mark migration complete
+    await db.appState.put({ key: MIGRATION_DONE_KEY, value: 'true' });
+    return true;
   } catch (error) {
-    console.error('Error saving songs:', error);
+    console.error('Migration from localStorage failed:', error);
+    return false;
   }
 }
+
+// --- Helper functions (unchanged) ---
 
 export function createNewSong(name: string = 'New Song'): Song {
   const now = new Date();
@@ -91,8 +167,8 @@ export function updateProgressionInSong(song: Song, progressionId: string, updat
   const now = new Date();
   return {
     ...song,
-    progressions: song.progressions.map(p => 
-      p.id === progressionId 
+    progressions: song.progressions.map(p =>
+      p.id === progressionId
         ? { ...p, ...updatedProgression, updatedAt: now }
         : p
     ),
@@ -114,7 +190,7 @@ export function reorderProgressionsInSong(song: Song, oldIndex: number, newIndex
   const newProgressions = [...song.progressions];
   const [reorderedItem] = newProgressions.splice(oldIndex, 1);
   newProgressions.splice(newIndex, 0, reorderedItem);
-  
+
   return {
     ...song,
     progressions: newProgressions,
@@ -124,105 +200,30 @@ export function reorderProgressionsInSong(song: Song, oldIndex: number, newIndex
 
 export function updateSongTuning(song: Song, tuning: Tuning): Song {
   const now = new Date();
-  return {
-    ...song,
-    tuning,
-    updatedAt: now
-  };
+  return { ...song, tuning, updatedAt: now };
 }
 
 export function updateSongCapoSettings(song: Song, capoSettings: CapoSettings): Song {
   const now = new Date();
-  return {
-    ...song,
-    capoSettings,
-    updatedAt: now
-  };
+  return { ...song, capoSettings, updatedAt: now };
 }
 
 export function updateSongBpm(song: Song, bpm: number): Song {
   const now = new Date();
-  return {
-    ...song,
-    bpm,
-    updatedAt: now
-  };
+  return { ...song, bpm, updatedAt: now };
 }
 
-export function saveCurrentSong(songId: string | null): void {
-  if (songId) {
-    localStorage.setItem(CURRENT_SONG_KEY, songId);
-  } else {
-    localStorage.removeItem(CURRENT_SONG_KEY);
-  }
-}
-
-export function loadCurrentSong(): string | null {
-  return localStorage.getItem(CURRENT_SONG_KEY);
-}
-
-// Migration function to convert old progressions to songs
-export function migrateProgressionsToSongs(): void {
-  try {
-    // Check if migration already done
-    if (localStorage.getItem(MIGRATION_FLAG_KEY)) {
-      return;
-    }
-
-    const oldProgressionsStr = localStorage.getItem('chordbook-progressions');
-    if (!oldProgressionsStr) {
-      localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
-      return;
-    }
-
-    const oldProgressions: Progression[] = JSON.parse(oldProgressionsStr);
-    if (oldProgressions.length === 0) {
-      localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
-      return;
-    }
-
-    // Create a default song for migrated progressions
-    const migrationSong = createNewSong('Imported Chord Progressions');
-    
-    // Convert progressions to named progressions
-    migrationSong.progressions = oldProgressions.map(prog => ({
-      id: prog.id,
-      name: prog.name,
-      chords: prog.chords,
-      createdAt: new Date(prog.createdAt),
-      updatedAt: new Date(prog.updatedAt)
-    }));
-
-    // Save the migration song alongside existing songs
-    const existingSongs = loadSongs();
-    saveSongs([...existingSongs, migrationSong]);
-
-    // Clear old progression data to prevent future confusion
-    localStorage.removeItem('chordbook-progressions');
-    localStorage.removeItem('chordbook-current-progression');
-
-    // Mark migration as complete
-    localStorage.setItem(MIGRATION_FLAG_KEY, 'true');
-    
-    console.log(`Migrated ${oldProgressions.length} progressions to song: ${migrationSong.name}`);
-  } catch (error) {
-    console.error('Error during progression migration:', error);
-  }
-}
-
-// Helper function to get the effective BPM for a progression
 export function getEffectiveBpm(progression: NamedProgression, song: Song): number {
   return progression.bpm || song.bpm || 120;
 }
 
-// Helper function to update progression BPM
 export function updateProgressionBpm(song: Song, progressionId: string, bpm: number): Song {
-  const updatedProgressions = song.progressions.map(p => 
-    p.id === progressionId 
+  const updatedProgressions = song.progressions.map(p =>
+    p.id === progressionId
       ? { ...p, bpm, updatedAt: new Date() }
       : p
   );
-  
+
   return {
     ...song,
     progressions: updatedProgressions,

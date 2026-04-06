@@ -11,11 +11,12 @@ import {
   loadCurrentProgression,
   generateProgressionId 
 } from './lib/progressionStorage';
-import { 
-  saveSongs, 
-  loadSongs, 
-  saveCurrentSong, 
-  loadCurrentSong,
+import {
+  saveSongs,
+  saveCurrentSong,
+  loadSongsAsync,
+  loadCurrentSongAsync,
+  migrateLocalStorageToDB,
   generateSongId,
   updateProgressionBpm
 } from './lib/songStorage';
@@ -65,17 +66,27 @@ function App() {
     }
   }, []);
 
-  // Load saved songs on app start
+  // Load saved songs on app start (async from IndexedDB)
   useEffect(() => {
-    const loadedSongs = loadSongs();
-    console.log('Loaded songs:', loadedSongs);
-    setSongs(loadedSongs);
-    
-    const currentId = loadCurrentSong();
-    console.log('Current song ID:', currentId);
-    if (currentId) {
-      setCurrentSongId(currentId);
+    async function init() {
+      await migrateLocalStorageToDB();
+      const loadedSongs = await loadSongsAsync();
+      console.log('Loaded songs:', loadedSongs);
+      setSongs(loadedSongs);
+
+      const currentId = await loadCurrentSongAsync();
+      console.log('Current song ID:', currentId);
+      if (currentId) {
+        setCurrentSongId(currentId);
+        const song = loadedSongs.find(s => s.id === currentId);
+        if (song) {
+          setCurrentTuning(song.tuning || DEFAULT_TUNING);
+          setCapoSettings(song.capoSettings || { fret: 0, enabled: false });
+          setCurrentBpm(song.bpm || 120);
+        }
+      }
     }
+    init();
   }, []);
 
   const saveCurrentProgressionToStorage = useCallback(() => {
@@ -124,6 +135,36 @@ function App() {
     saveProgression();
   }, [progression, currentProgressionId, currentProgressionName, saveCurrentProgressionToStorage]);
 
+  function handleTuningChange(tuning: Tuning) {
+    setCurrentTuning(tuning);
+    if (!currentSongId) return;
+
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song =>
+        song.id === currentSongId
+          ? { ...song, tuning, updatedAt: new Date() }
+          : song
+      );
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
+  function handleCapoChange(capo: CapoSettings) {
+    setCapoSettings(capo);
+    if (!currentSongId) return;
+
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song =>
+        song.id === currentSongId
+          ? { ...song, capoSettings: capo, updatedAt: new Date() }
+          : song
+      );
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
   // BPM handlers for songs and progressions
   function handleSongBpmChange(songId: string, newBpm: number) {
     setSongs(prevSongs => {
@@ -146,16 +187,18 @@ function App() {
       ...song,
       lastOpened: new Date()
     };
-    
+
     // Update the song in the songs list
     const updatedSongs = songs.map(s => s.id === song.id ? updatedSong : s);
     setSongs(updatedSongs);
     saveSongs(updatedSongs);
-    
+
     setCurrentSongId(song.id);
     saveCurrentSong(song.id);
-    
-    // Update BPM based on the selected song
+
+    // Restore song's tuning, capo, and BPM
+    setCurrentTuning(song.tuning || DEFAULT_TUNING);
+    setCapoSettings(song.capoSettings || { fret: 0, enabled: false });
     setCurrentBpm(song.bpm || 120);
   }
 
@@ -175,8 +218,8 @@ function App() {
       name,
       bpm: 120,
       progressions: [defaultProgression],
-      tuning: currentTuning,
-      capoSettings,
+      tuning: DEFAULT_TUNING,
+      capoSettings: { fret: 0, enabled: false },
       createdAt: now,
       updatedAt: now
     };
@@ -187,9 +230,11 @@ function App() {
       return updatedSongs;
     });
     
-    // Select the new song
+    // Select the new song and reset tuning/capo to defaults
     setCurrentSongId(newSong.id);
     saveCurrentSong(newSong.id);
+    setCurrentTuning(DEFAULT_TUNING);
+    setCapoSettings({ fret: 0, enabled: false });
     setCurrentBpm(newSong.bpm);
   }
 
@@ -416,16 +461,16 @@ function App() {
       {/* Tuning and Capo Controls */}
       <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-4 sm:mb-6">
         <div className="w-full sm:w-auto">
-          <TuningSelector 
+          <TuningSelector
             currentTuning={currentTuning}
-            onTuningChange={setCurrentTuning}
+            onTuningChange={handleTuningChange}
           />
         </div>
         
         <div className="w-full sm:w-auto">
           <CapoSelector
             capoSettings={capoSettings}
-            onCapoChange={setCapoSettings}
+            onCapoChange={handleCapoChange}
           />
         </div>
       </div>

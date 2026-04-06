@@ -39,7 +39,7 @@ export default function BackupManager({ onDataRestored }: BackupManagerProps) {
   const handleCreateFullBackup = async () => {
     setIsCreatingBackup(true);
     try {
-      const result = createFullBackup();
+      const result = await createFullBackup();
       
       let message = 'Backup created: ';
       if (result.localStorage && result.download) {
@@ -64,9 +64,9 @@ export default function BackupManager({ onDataRestored }: BackupManagerProps) {
     }
   };
 
-  const handleDownloadBackup = () => {
+  const handleDownloadBackup = async () => {
     try {
-      const success = downloadBackupAsJSON();
+      const success = await downloadBackupAsJSON();
       if (success) {
         alert('Backup downloaded successfully');
       } else {
@@ -90,7 +90,7 @@ export default function BackupManager({ onDataRestored }: BackupManagerProps) {
         return;
       }
 
-      const success = restoreFromBackup(backup);
+      const success = await restoreFromBackup(backup);
       if (success) {
         alert('Data restored successfully from local storage backup');
         onDataRestored?.();
@@ -121,8 +121,8 @@ export default function BackupManager({ onDataRestored }: BackupManagerProps) {
     setIsRestoring(true);
     try {
       const backup = await importBackupFromJSON(importFile);
-      const success = restoreFromBackup(backup);
-      
+      const success = await restoreFromBackup(backup);
+
       if (success) {
         alert('Data restored successfully from imported backup');
         onDataRestored?.();

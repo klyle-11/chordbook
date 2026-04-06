@@ -3,7 +3,8 @@ import type { Song } from '../types/song';
 import type { PDFExportOptions } from '../lib/pdfExport';
 import { exportSongToPDF, exportSongToPDFWithDiagrams, DEFAULT_PDF_OPTIONS } from '../lib/pdfExport';
 import { formatSongInfo } from '../lib/displayUtils';
-import { TraditionalChordDiagram } from './TraditionalChordDiagram';
+import { getUniqueNotesFromSong, describeSongScale } from '../lib/songAnalysis';
+// Traditional diagrams intentionally excluded from PDF export
 import FretBoard from './Fretboard';
 
 interface PDFExportDialogProps {
@@ -51,6 +52,11 @@ function PrintableContent({ song, options }: PrintableContentProps) {
                 <p><strong>Base Tempo:</strong> {song.bpm} BPM</p>
               </div>
             </div>
+            {/* Song scale details */}
+            <div className="mt-3 text-sm text-gray-700">
+              <p><strong>Scale:</strong> {describeSongScale(song)}</p>
+              <p className="mt-1"><strong>Unique Notes:</strong> {getUniqueNotesFromSong(song).join(', ')}</p>
+            </div>
           </div>
         </div>
       )}
@@ -74,24 +80,7 @@ function PrintableContent({ song, options }: PrintableContentProps) {
                 </div>
               </div>
 
-              {/* Traditional Chord Diagrams */}
-              {options.includeTraditionalDiagrams && progression.chords.length > 0 && (
-                <div className="mb-8">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Traditional Chord Diagrams</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {progression.chords.map((chord, chordIndex) => (
-                      <div key={`${chord.name}-${chordIndex}`} className="text-center">
-                        <TraditionalChordDiagram 
-                          chordName={chord.name} 
-                          tuning={song.tuning}
-                        />
-                        <p className="text-sm text-gray-600 mt-2 font-medium">{chord.name}</p>
-                        <p className="text-xs text-gray-500">Notes: {chord.notes.join(', ')}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Traditional chord diagrams intentionally excluded from PDF export */}
 
               {/* Fretboard Diagrams */}
               {options.includeFretboardDiagrams && progression.chords.length > 0 && (
@@ -228,15 +217,7 @@ export default function PDFExportDialog({ song, isOpen, onClose }: PDFExportDial
                   />
                   Scale information
                 </label>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={options.includeTraditionalDiagrams}
-                    onChange={(e) => setOptions({...options, includeTraditionalDiagrams: e.target.checked})}
-                    className="mr-2"
-                  />
-                  Traditional chord diagrams
-                </label>
+                {/* Traditional diagrams intentionally omitted */}
                 <label className="flex items-center">
                   <input
                     type="checkbox"
@@ -317,6 +298,7 @@ export default function PDFExportDialog({ song, isOpen, onClose }: PDFExportDial
         <div 
           ref={printableRef}
           className="fixed -top-[10000px] left-0 bg-white" 
+          id="pdf-export-root"
           style={{ width: '210mm' }}
         >
           <PrintableContent song={song} options={options} />

@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron": "electron .",
-    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && NODE_ENV=development electron .\"",
+    "electron-dev": "concurrently \"npm run dev\" \"sh -c 'while ! curl -s http://localhost:5173 > /dev/null; do sleep 1; done && NODE_ENV=development electron .'\"",
     "electron-pack": "npm run build && electron-builder",
     "electron-build": "npm run build && electron-builder --publish=never",
     "electron-dist": "npm run build && electron-builder --publish=onTagOrDraft"
@@ -23,6 +23,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@tonaljs/tonal": "^4.10.0",
+    "dexie": "^4.4.2",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
     "react": "^19.1.0",
@@ -47,8 +48,7 @@
     "tailwindcss": "^4.1.11",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.35.1",
-    "vite": "^7.0.4",
-    "wait-on": "^8.0.3"
+    "vite": "^7.0.4"
   },
   "build": {
     "appId": "com.guitarchordmap.app",

@@ -2,10 +2,10 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { Song } from '../types/song';
 import { formatSongInfo } from './displayUtils';
+import { describeSongScale, getUniqueNotesFromSong } from './songAnalysis';
 
 export interface PDFExportOptions {
   includeScale: boolean;
-  includeTraditionalDiagrams: boolean;
   includeFretboardDiagrams: boolean;
   paperSize: 'a4' | 'letter';
   orientation: 'portrait' | 'landscape';
@@ -13,7 +13,6 @@ export interface PDFExportOptions {
 
 export const DEFAULT_PDF_OPTIONS: PDFExportOptions = {
   includeScale: true,
-  includeTraditionalDiagrams: true,
   includeFretboardDiagrams: true,
   paperSize: 'a4',
   orientation: 'portrait'
@@ -80,7 +79,16 @@ export async function exportSongToPDF(
     }
     
     pdf.text(`Tempo: ${song.bpm} BPM`, margin, yPosition);
-    yPosition += 20;
+  yPosition += 8;
+
+  // Scale description and unique notes
+  const scaleDescription = describeSongScale(song);
+  pdf.text(`Scale: ${scaleDescription}`, margin, yPosition);
+  yPosition += 8;
+
+  const uniqueNotes = getUniqueNotesFromSong(song).join(', ');
+  pdf.text(`Unique Notes: ${uniqueNotes}`, margin, yPosition);
+  yPosition += 12;
   }
 
   // Add progressions
@@ -184,7 +192,133 @@ export async function exportSongToPDFWithDiagrams(
       allowTaint: true,
       backgroundColor: '#ffffff',
       width: containerElement.offsetWidth,
-      height: containerElement.offsetHeight
+      height: containerElement.offsetHeight,
+  logging: true,
+      // Ensure colors are inline RGB in clone to avoid unsupported CSS color functions (e.g., oklch)
+      onclone: (clonedDoc: Document) => {
+        try {
+          const win = clonedDoc.defaultView || window;
+          // If the root has an id, prefer narrowing to that subtree
+          const root = clonedDoc.getElementById('pdf-export-root') || clonedDoc.body;
+          if (!root) return;
+
+          // 1) Sanitize <style> tags to strip advanced color functions before parsing
+          const styleTags = Array.from(clonedDoc.querySelectorAll('style'));
+          let replaceCount = 0;
+          styleTags.forEach((tag) => {
+            const t = tag.textContent;
+            if (!t) return;
+            const replaced = t
+              .replace(/oklch\([^)]*\)/gi, 'rgb(0,0,0)')
+              .replace(/oklab\([^)]*\)/gi, 'rgb(0,0,0)')
+              .replace(/(?<![a-z])lch\([^)]*\)/gi, 'rgb(0,0,0)')
+              .replace(/(?<![a-z])lab\([^)]*\)/gi, 'rgb(0,0,0)')
+              .replace(/color\([^)]*\)/gi, 'rgb(0,0,0)');
+            if (replaced !== t) {
+              tag.textContent = replaced;
+              replaceCount++;
+            }
+          });
+          if (replaceCount > 0) {
+            console.warn(`pdf-export: sanitized ${replaceCount} <style> tag(s) to remove advanced color functions`);
+          }
+
+          // Helper to normalize CSS colors to rgba() using canvas
+          const convCanvas = clonedDoc.createElement('canvas');
+          const convCtx = convCanvas.getContext('2d');
+          const normalizeColor = (value: string | null): string | null => {
+            if (!value) return null;
+            // Quick exit for rgb/rgba/transparent
+            const v = value.trim();
+            if (v === 'transparent' || v.startsWith('rgb')) return v;
+            if (!convCtx) return v;
+            try {
+              convCtx.fillStyle = v;
+              const out = convCtx.fillStyle as string;
+              // Some browsers may still echo oklch; if so, fall back to transparent to avoid crashes
+              if (!out || /oklch|oklab|lch\(|lab\(|color\(/i.test(out)) return 'rgba(0,0,0,0)';
+              return out;
+            } catch {
+              return 'rgba(0,0,0,0)';
+            }
+          };
+
+          // Known Tailwind color name to RGB fallbacks (subset we use)
+          const rgbFallback: Record<string, string> = {
+            'var(--tw-prose-body)': 'rgb(55,65,81)',
+            'var(--tw-prose-headings)': 'rgb(30,41,59)',
+            'var(--tw-prose-bold)': 'rgb(17,24,39)',
+            'var(--tw-prose-links)': 'rgb(37,99,235)'
+          };
+
+          const all = root.querySelectorAll<HTMLElement>('*');
+          const hits: string[] = [];
+          const hasUnsupported = (val: string | null | undefined) => !!val && /oklch|oklab|lch\(|lab\(|color\(/i.test(val);
+          const sel = (el: Element) => {
+            const id = el.id ? `#${el.id}` : '';
+            const cls = (el as HTMLElement).className ? '.' + (el as HTMLElement).className.toString().trim().replace(/\s+/g, '.') : '';
+            return `${el.tagName.toLowerCase()}${id}${cls}`;
+          };
+          all.forEach((el) => {
+            const cs = win.getComputedStyle(el);
+            // Inline commonly used colors
+            if (cs && cs.color) {
+              const c = rgbFallback[cs.color] || normalizeColor(cs.color) || cs.color;
+              el.style.color = c;
+            }
+            if (cs && cs.backgroundColor) {
+              const bgc = rgbFallback[cs.backgroundColor] || normalizeColor(cs.backgroundColor) || cs.backgroundColor;
+              el.style.backgroundColor = bgc;
+            }
+
+            // Borders
+            if (cs.borderTopColor) el.style.borderTopColor = normalizeColor(cs.borderTopColor) || cs.borderTopColor;
+            if (cs.borderRightColor) el.style.borderRightColor = normalizeColor(cs.borderRightColor) || cs.borderRightColor;
+            if (cs.borderBottomColor) el.style.borderBottomColor = normalizeColor(cs.borderBottomColor) || cs.borderBottomColor;
+            if (cs.borderLeftColor) el.style.borderLeftColor = normalizeColor(cs.borderLeftColor) || cs.borderLeftColor;
+
+            if (cs.outlineColor) el.style.outlineColor = normalizeColor(cs.outlineColor) || cs.outlineColor;
+            if (cs.caretColor) (el.style as CSSStyleDeclaration).setProperty('caret-color', normalizeColor(cs.caretColor) || cs.caretColor);
+            const tdColor = cs.getPropertyValue('text-decoration-color');
+            if (tdColor) (el.style as CSSStyleDeclaration).setProperty('text-decoration-color', normalizeColor(tdColor) || tdColor);
+            const columnRuleColor = cs.getPropertyValue('column-rule-color');
+            if (columnRuleColor) (el.style as CSSStyleDeclaration).setProperty('column-rule-color', normalizeColor(columnRuleColor) || columnRuleColor);
+            const accentColor = cs.getPropertyValue('accent-color');
+            if (accentColor) (el.style as CSSStyleDeclaration).setProperty('accent-color', normalizeColor(accentColor) || accentColor);
+
+            // SVG fills/strokes if present
+            const fill = cs.getPropertyValue('fill');
+            const stroke = cs.getPropertyValue('stroke');
+            const style = (el as HTMLElement).style as CSSStyleDeclaration;
+            if (fill && fill !== 'none') style.setProperty('fill', normalizeColor(fill) || fill);
+            if (stroke && stroke !== 'none') style.setProperty('stroke', normalizeColor(stroke) || stroke);
+
+            // Logging: capture first few elements still showing unsupported colors in computed style
+            if (hasUnsupported(cs.color)) hits.push(`${sel(el)} color=${cs.color}`);
+            if (hasUnsupported(cs.backgroundColor)) hits.push(`${sel(el)} backgroundColor=${cs.backgroundColor}`);
+            const bg = cs.getPropertyValue('background');
+            if (hasUnsupported(bg)) hits.push(`${sel(el)} background=${bg}`);
+            if (hasUnsupported(cs.borderTopColor)) hits.push(`${sel(el)} borderTopColor=${cs.borderTopColor}`);
+            if (hasUnsupported(cs.borderRightColor)) hits.push(`${sel(el)} borderRightColor=${cs.borderRightColor}`);
+            if (hasUnsupported(cs.borderBottomColor)) hits.push(`${sel(el)} borderBottomColor=${cs.borderBottomColor}`);
+            if (hasUnsupported(cs.borderLeftColor)) hits.push(`${sel(el)} borderLeftColor=${cs.borderLeftColor}`);
+            if (hasUnsupported(cs.outlineColor)) hits.push(`${sel(el)} outlineColor=${cs.outlineColor}`);
+            const bs = cs.getPropertyValue('box-shadow');
+            if (hasUnsupported(bs)) hits.push(`${sel(el)} box-shadow=${bs}`);
+            const ts = cs.getPropertyValue('text-shadow');
+            if (hasUnsupported(ts)) hits.push(`${sel(el)} text-shadow=${ts}`);
+            const filt = cs.getPropertyValue('filter');
+            if (hasUnsupported(filt)) hits.push(`${sel(el)} filter=${filt}`);
+          });
+
+          if (hits.length) {
+            console.warn('pdf-export: unsupported color functions detected in clone (showing up to 20):', hits.slice(0, 20));
+          }
+        } catch (e) {
+          // Non-fatal; we'll try rendering anyway
+          console.warn('onclone color inlining failed:', e);
+        }
+      }
     });
 
     // Create PDF

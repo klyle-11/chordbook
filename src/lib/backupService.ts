@@ -1,6 +1,6 @@
 import type { Song, SavedSong } from '../types/song';
 import type { Progression } from '../types/progression';
-import { loadSongs, saveSongs } from './songStorage';
+import { loadSongsAsync, saveSongsAsync } from './songStorage';
 import { loadProgressions, saveProgressions } from './progressionStorage';
 
 interface BackupData {
@@ -19,10 +19,10 @@ function generateTimestamp(): string {
 }
 
 // Create a complete backup of all data
-export function createBackup(): BackupData {
-  const songs = loadSongs();
+export async function createBackup(): Promise<BackupData> {
+  const songs = await loadSongsAsync();
   const progressions = loadProgressions();
-  
+
   // Serialize songs for JSON storage
   const serializedSongs: SavedSong[] = songs.map(song => ({
     ...song,
@@ -35,21 +35,21 @@ export function createBackup(): BackupData {
     updatedAt: song.updatedAt.toISOString(),
     lastOpened: song.lastOpened?.toISOString()
   }));
-  
+
   const backup: BackupData = {
     songs: serializedSongs,
     progressions,
     timestamp: generateTimestamp(),
     version: BACKUP_VERSION
   };
-  
+
   return backup;
 }
 
 // Save backup to localStorage (primary backup)
-export function saveBackupToLocalStorage(): boolean {
+export async function saveBackupToLocalStorage(): Promise<boolean> {
   try {
-    const backup = createBackup();
+    const backup = await createBackup();
     localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(backup));
     console.log('Backup saved to localStorage at', backup.timestamp);
     return true;
@@ -60,9 +60,9 @@ export function saveBackupToLocalStorage(): boolean {
 }
 
 // Save backup to JSON file download (secondary backup)
-export function downloadBackupAsJSON(): boolean {
+export async function downloadBackupAsJSON(): Promise<boolean> {
   try {
-    const backup = createBackup();
+    const backup = await createBackup();
     const blob = new Blob([JSON.stringify(backup, null, 2)], { 
       type: 'application/json' 
     });
@@ -85,10 +85,10 @@ export function downloadBackupAsJSON(): boolean {
 }
 
 // Save backup to both sources
-export function createFullBackup(): { localStorage: boolean, download: boolean } {
-  const localStorageSuccess = saveBackupToLocalStorage();
-  const downloadSuccess = downloadBackupAsJSON();
-  
+export async function createFullBackup(): Promise<{ localStorage: boolean, download: boolean }> {
+  const localStorageSuccess = await saveBackupToLocalStorage();
+  const downloadSuccess = await downloadBackupAsJSON();
+
   return {
     localStorage: localStorageSuccess,
     download: downloadSuccess
@@ -110,7 +110,7 @@ export function loadBackupFromLocalStorage(): BackupData | null {
 }
 
 // Restore data from backup
-export function restoreFromBackup(backup: BackupData): boolean {
+export async function restoreFromBackup(backup: BackupData): Promise<boolean> {
   try {
     // Restore songs
     const songs: Song[] = backup.songs.map(savedSong => ({
@@ -124,12 +124,12 @@ export function restoreFromBackup(backup: BackupData): boolean {
       updatedAt: new Date(savedSong.updatedAt),
       lastOpened: savedSong.lastOpened ? new Date(savedSong.lastOpened) : undefined
     }));
-    
-    saveSongs(songs);
-    
+
+    await saveSongsAsync(songs);
+
     // Restore progressions
     saveProgressions(backup.progressions);
-    
+
     console.log('Data restored from backup created at', backup.timestamp);
     return true;
   } catch (error) {
@@ -139,9 +139,9 @@ export function restoreFromBackup(backup: BackupData): boolean {
 }
 
 // Auto-backup function that runs periodically
-export function performAutoBackup(): void {
+export async function performAutoBackup(): Promise<void> {
   try {
-    saveBackupToLocalStorage();
+    await saveBackupToLocalStorage();
     console.log('Auto-backup completed');
   } catch (error) {
     console.error('Auto-backup failed:', error);
