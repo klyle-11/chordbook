@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getUniqueNotesFromSong, describeSongScale } from '../lib/songAnalysis';
-import Fretboard from './Fretboard';
+import FretboardDiagram from './FretboardDiagram';
 import type { Song } from '../types/song';
 
 interface SongScaleProps {
@@ -76,7 +76,7 @@ export default function SongScale({ song }: SongScaleProps) {
                 All Notes on Fretboard
               </h4>
               <div className="overflow-x-auto">
-                <Fretboard 
+                <FretboardDiagram
                   chordNotes={uniqueNotes} 
                   tuning={song.tuning}
                   capoSettings={song.capoSettings}

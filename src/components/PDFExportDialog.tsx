@@ -5,7 +5,7 @@ import { exportSongToPDF, exportSongToPDFWithDiagrams, DEFAULT_PDF_OPTIONS } fro
 import { formatSongInfo } from '../lib/displayUtils';
 import { getUniqueNotesFromSong, describeSongScale } from '../lib/songAnalysis';
 // Traditional diagrams intentionally excluded from PDF export
-import FretBoard from './Fretboard';
+import FretboardDiagram from './FretboardDiagram';
 
 interface PDFExportDialogProps {
   song: Song;
@@ -93,7 +93,7 @@ function PrintableContent({ song, options }: PrintableContentProps) {
                           {chordIndex + 1}. {chord.name}
                         </h5>
                         <div className="bg-gray-50 p-4 rounded-lg">
-                          <FretBoard 
+                          <FretboardDiagram
                             chordNotes={chord.notes} 
                             tuning={song.tuning}
                             capoSettings={song.capoSettings}

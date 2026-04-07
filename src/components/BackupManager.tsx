@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { 
-  createFullBackup, 
+import {
+  createFullBackup,
   downloadBackupAsJSON,
   getBackupInfo,
   loadBackupFromLocalStorage,
@@ -19,235 +19,181 @@ export default function BackupManager({ onDataRestored }: BackupManagerProps) {
   const [isRestoring, setIsRestoring] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    // Load initial backup info
     const info = getBackupInfo();
     setBackupInfo(info);
-
-    // Set up auto-backup every 5 minutes
-    const autoBackupInterval = setInterval(() => {
+    const interval = setInterval(() => {
       performAutoBackup();
-      // Refresh backup info after auto-backup
-      const updatedInfo = getBackupInfo();
-      setBackupInfo(updatedInfo);
-    }, 5 * 60 * 1000); // 5 minutes
-
-    return () => clearInterval(autoBackupInterval);
+      setBackupInfo(getBackupInfo());
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Auto-clear status message
+  useEffect(() => {
+    if (statusMessage) {
+      const timer = setTimeout(() => setStatusMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [statusMessage]);
 
   const handleCreateFullBackup = async () => {
     setIsCreatingBackup(true);
     try {
       const result = await createFullBackup();
-      
-      let message = 'Backup created: ';
-      if (result.localStorage && result.download) {
-        message += 'Saved to local storage and downloaded as JSON file';
-      } else if (result.localStorage) {
-        message += 'Saved to local storage only (download failed)';
-      } else if (result.download) {
-        message += 'Downloaded as JSON file only (local storage failed)';
-      } else {
-        message = 'Backup failed for both sources';
-      }
-      
-      alert(message);
-      
-      // Refresh backup info
-      const info = getBackupInfo();
-      setBackupInfo(info);
+      const msg = result.localStorage && result.download
+        ? 'Saved and downloaded.'
+        : result.localStorage ? 'Saved locally.' : result.download ? 'Downloaded.' : 'Backup failed.';
+      setStatusMessage({ text: msg, type: result.localStorage || result.download ? 'success' : 'error' });
+      setBackupInfo(getBackupInfo());
     } catch (error) {
-      alert('Backup failed: ' + (error as Error).message);
+      setStatusMessage({ text: 'Backup failed: ' + (error as Error).message, type: 'error' });
     } finally {
       setIsCreatingBackup(false);
     }
   };
 
   const handleDownloadBackup = async () => {
-    try {
-      const success = await downloadBackupAsJSON();
-      if (success) {
-        alert('Backup downloaded successfully');
-      } else {
-        alert('Failed to download backup');
-      }
-    } catch (error) {
-      alert('Download failed: ' + (error as Error).message);
-    }
+    const success = await downloadBackupAsJSON();
+    setStatusMessage({ text: success ? 'Backup downloaded.' : 'Download failed.', type: success ? 'success' : 'error' });
   };
 
   const handleRestoreFromLocalStorage = async () => {
-    if (!confirm('This will replace all current data with the backup. Are you sure?')) {
-      return;
-    }
-
     setIsRestoring(true);
     try {
       const backup = loadBackupFromLocalStorage();
       if (!backup) {
-        alert('No backup found in local storage');
+        setStatusMessage({ text: 'No backup found.', type: 'error' });
         return;
       }
-
       const success = await restoreFromBackup(backup);
       if (success) {
-        alert('Data restored successfully from local storage backup');
+        setStatusMessage({ text: 'Restored successfully.', type: 'success' });
+        setShowRestoreConfirm(false);
         onDataRestored?.();
       } else {
-        alert('Failed to restore data');
+        setStatusMessage({ text: 'Restore failed.', type: 'error' });
       }
     } catch (error) {
-      alert('Restore failed: ' + (error as Error).message);
+      setStatusMessage({ text: 'Restore failed: ' + (error as Error).message, type: 'error' });
     } finally {
       setIsRestoring(false);
-    }
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setImportFile(file);
     }
   };
 
   const handleImportBackup = async () => {
     if (!importFile) return;
-
-    if (!confirm('This will replace all current data with the imported backup. Are you sure?')) {
-      return;
-    }
-
     setIsRestoring(true);
     try {
       const backup = await importBackupFromJSON(importFile);
       const success = await restoreFromBackup(backup);
-
       if (success) {
-        alert('Data restored successfully from imported backup');
-        onDataRestored?.();
+        setStatusMessage({ text: 'Imported successfully.', type: 'success' });
         setShowImportDialog(false);
         setImportFile(null);
+        onDataRestored?.();
       } else {
-        alert('Failed to restore data from backup');
+        setStatusMessage({ text: 'Import failed.', type: 'error' });
       }
     } catch (error) {
-      alert('Import failed: ' + (error as Error).message);
+      setStatusMessage({ text: 'Import failed: ' + (error as Error).message, type: 'error' });
     } finally {
       setIsRestoring(false);
     }
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString();
-  };
-
   return (
-    <div className="mt-8 p-6 bg-white border border-gray-200 rounded-lg">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Backup & Restore</h3>
-      
-      {/* Backup Info */}
+    <div className="themed-card p-6">
+      <h3 className="text-lg font-semibold mb-4" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>
+        Backup & Restore
+      </h3>
+
       {backupInfo.exists && backupInfo.timestamp && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
-          <p className="text-sm text-green-800">
-            <span className="font-medium">Last backup:</span> {formatTimestamp(backupInfo.timestamp)}
+        <div className="mb-4 p-3 rounded-lg" style={{ background: 'var(--success-subtle)', border: '1px solid var(--success)' }}>
+          <p className="text-sm" style={{ color: 'var(--success)' }}>
+            Last backup: {new Date(backupInfo.timestamp).toLocaleString()}
           </p>
-          <p className="text-xs text-green-600 mt-1">
-            Auto-backup runs every 5 minutes
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Auto-backup every 5 min</p>
+        </div>
+      )}
+
+      {statusMessage && (
+        <div className="mb-4 p-3 rounded-lg" style={{
+          background: statusMessage.type === 'success' ? 'var(--success-subtle)' : 'var(--danger-subtle)',
+          border: `1px solid ${statusMessage.type === 'success' ? 'var(--success)' : 'var(--danger)'}`
+        }}>
+          <p className="text-sm" style={{ color: statusMessage.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>
+            {statusMessage.text}
           </p>
         </div>
       )}
-      
-      {/* Backup Actions */}
+
       <div className="space-y-4">
         <div>
-          <h4 className="font-medium text-gray-900 mb-2">Create Backup</h4>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={handleCreateFullBackup}
-              disabled={isCreatingBackup}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isCreatingBackup ? 'Creating...' : 'Full Backup (Local + Download)'}
+          <p className="text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)' }}>Create</p>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={handleCreateFullBackup} disabled={isCreatingBackup} className="themed-btn-primary">
+              {isCreatingBackup ? 'Creating...' : 'Full Backup'}
             </button>
-            
-            <button
-              onClick={handleDownloadBackup}
-              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-            >
-              Download JSON Only
-            </button>
+            <button onClick={handleDownloadBackup} className="themed-btn-secondary">Download JSON</button>
           </div>
-          <p className="text-xs text-gray-600 mt-1">
-            Full backup saves to local storage and downloads a JSON file
-          </p>
         </div>
 
-        {/* Restore Actions */}
         <div>
-          <h4 className="font-medium text-gray-900 mb-2">Restore Data</h4>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={handleRestoreFromLocalStorage}
-              disabled={!backupInfo.exists || isRestoring}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isRestoring ? 'Restoring...' : 'Restore from Local Storage'}
+          <p className="text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)' }}>Restore</p>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => setShowRestoreConfirm(true)} disabled={!backupInfo.exists || isRestoring} className="themed-btn-primary">
+              {isRestoring ? 'Restoring...' : 'From Local'}
             </button>
-            
-            <button
-              onClick={() => setShowImportDialog(true)}
-              disabled={isRestoring}
-              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Import from JSON File
+            <button onClick={() => setShowImportDialog(true)} disabled={isRestoring} className="themed-btn-secondary">
+              Import JSON
             </button>
           </div>
         </div>
       </div>
 
-      {/* Import Dialog */}
-      {showImportDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Import Backup</h3>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select backup JSON file
-              </label>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleFileUpload}
-                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-              />
+      {/* Restore confirmation dialog */}
+      {showRestoreConfirm && (
+        <div className="fixed inset-0 themed-overlay flex items-center justify-center z-50 p-4">
+          <div className="themed-dialog p-6 max-w-md w-full animate-fade-in">
+            <h3 className="text-lg font-semibold mb-4" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>Restore from Local Backup</h3>
+            <div className="mb-4 p-3 rounded-lg" style={{ background: 'var(--danger-subtle)' }}>
+              <p className="text-sm" style={{ color: 'var(--danger)' }}>This will replace all current data with the backup.</p>
             </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowRestoreConfirm(false)} className="themed-btn-secondary">Cancel</button>
+              <button onClick={handleRestoreFromLocalStorage} disabled={isRestoring} className="themed-btn-danger">
+                {isRestoring ? 'Restoring...' : 'Restore'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* Import dialog */}
+      {showImportDialog && (
+        <div className="fixed inset-0 themed-overlay flex items-center justify-center z-50 p-4">
+          <div className="themed-dialog p-6 max-w-md w-full animate-fade-in">
+            <h3 className="text-lg font-semibold mb-4" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>Import Backup</h3>
+            <input
+              type="file"
+              accept=".json"
+              onChange={e => setImportFile(e.target.files?.[0] || null)}
+              className="block w-full text-sm mb-4"
+              style={{ color: 'var(--text-secondary)' }}
+            />
             {importFile && (
-              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                <p className="text-sm text-yellow-800">
-                  <span className="font-medium">Warning:</span> This will replace all current songs and progressions with the imported data.
-                </p>
+              <div className="mb-4 p-3 rounded-lg" style={{ background: 'var(--danger-subtle)' }}>
+                <p className="text-sm" style={{ color: 'var(--danger)' }}>This will replace all current data.</p>
               </div>
             )}
-
             <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowImportDialog(false);
-                  setImportFile(null);
-                }}
-                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleImportBackup}
-                disabled={!importFile || isRestoring}
-                className="px-4 py-2 bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
-              >
-                {isRestoring ? 'Importing...' : 'Import & Restore'}
+              <button onClick={() => { setShowImportDialog(false); setImportFile(null); }} className="themed-btn-secondary">Cancel</button>
+              <button onClick={handleImportBackup} disabled={!importFile || isRestoring} className="themed-btn-primary">
+                {isRestoring ? 'Importing...' : 'Import'}
               </button>
             </div>
           </div>

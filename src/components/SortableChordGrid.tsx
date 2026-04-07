@@ -12,7 +12,7 @@ import {
   sortableKeyboardCoordinates,
   rectSortingStrategy,
 } from '@dnd-kit/sortable';
-import type { Chord } from '../types/chord';
+import type { Chord, ChordVoicing } from '../types/chord';
 import type { Tuning, CapoSettings } from '../lib/tunings';
 import DraggableChordCard from './DraggableChordCard';
 
@@ -23,6 +23,7 @@ interface SortableChordGridProps {
   onReorder: (oldIndex: number, newIndex: number) => void;
   onReplace: (index: number) => void;
   onRemove: (index: number) => void;
+  onUpdateVoicing?: (index: number, voicing: ChordVoicing | undefined) => void;
 }
 
 export default function SortableChordGrid({
@@ -32,6 +33,7 @@ export default function SortableChordGrid({
   onReorder,
   onReplace,
   onRemove,
+  onUpdateVoicing,
 }: SortableChordGridProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -72,6 +74,7 @@ export default function SortableChordGrid({
               capoSettings={capoSettings}
               onReplace={onReplace}
               onRemove={onRemove}
+              onUpdateVoicing={onUpdateVoicing}
             />
           ))}
         </div>

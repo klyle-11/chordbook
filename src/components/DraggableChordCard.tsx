@@ -1,8 +1,11 @@
+import { useState, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Chord } from '../types/chord';
+import type { Chord, ChordVoicing } from '../types/chord';
 import type { Tuning, CapoSettings } from '../lib/tunings';
-import FretBoard from './Fretboard';
+import FretboardDiagram from './FretboardDiagram';
+import { ChordDiagram } from './ChordDiagram';
+import ChordVoicingEditor, { type ChordVoicingEditorRef } from './ChordVoicingEditor';
 
 interface DraggableChordCardProps {
   chord: Chord;
@@ -11,16 +14,21 @@ interface DraggableChordCardProps {
   capoSettings: CapoSettings;
   onReplace: (index: number) => void;
   onRemove: (index: number) => void;
+  onUpdateVoicing?: (index: number, voicing: ChordVoicing | undefined) => void;
 }
 
-export default function DraggableChordCard({ 
-  chord, 
-  index, 
+export default function DraggableChordCard({
+  chord,
+  index,
   tuning,
   capoSettings,
-  onReplace, 
-  onRemove 
+  onReplace,
+  onRemove,
+  onUpdateVoicing,
 }: DraggableChordCardProps) {
+  const [showVoicingEditor, setShowVoicingEditor] = useState(false);
+  const voicingEditorRef = useRef<ChordVoicingEditorRef>(null);
+
   const {
     attributes,
     listeners,
@@ -35,6 +43,13 @@ export default function DraggableChordCard({
     transition,
   };
 
+  // When voicing editor is open, fretboard clicks push frets into the editor
+  const handleFretClick = showVoicingEditor
+    ? (stringIndex: number, fret: number, _note: string) => {
+        voicingEditorRef.current?.setFretForString(stringIndex, fret);
+      }
+    : undefined;
+
   return (
     <div className="flex justify-start">
       <div
@@ -43,8 +58,8 @@ export default function DraggableChordCard({
         {...attributes}
         data-chord-diagram
         className={`w-full bg-white rounded-lg p-3 sm:p-4 transition-all duration-200 border-2 shadow-sm ${
-          isDragging 
-            ? 'opacity-70 shadow-2xl z-50 border-blue-500 scale-105' 
+          isDragging
+            ? 'opacity-70 shadow-2xl z-50 border-blue-500 scale-105'
             : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
         }`}
       >
@@ -52,6 +67,14 @@ export default function DraggableChordCard({
       <div className="flex items-center justify-between mb-2 sm:mb-1">
         <h3 className="text-base sm:text-lg font-medium text-gray-800 truncate min-w-0 flex-1 mr-2">{chord.name}</h3>
         <div className="flex gap-1 sm:gap-2 flex-shrink-0">
+          <button
+            onClick={() => setShowVoicingEditor(!showVoicingEditor)}
+            className="px-2 py-1 text-white text-xs rounded"
+            style={{ background: showVoicingEditor ? 'var(--accent)' : '#6b7280' }}
+            title="Edit voicing (frets per string)"
+          >
+            TAB
+          </button>
           <button
             onClick={() => onReplace(index)}
             className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
@@ -74,14 +97,46 @@ export default function DraggableChordCard({
           </div>
         </div>
       </div>
-      
+
       <p className="text-xs sm:text-sm text-gray-600 mb-2 text-center break-words">
         Notes: {chord.notes.join(", ")}
       </p>
-      
+
+      {/* Chord diagram (TAB when voicing exists, dot-style otherwise) */}
+      <ChordDiagram chordName={chord.name} tuning={tuning} voicing={chord.voicing} />
+
+      {/* Fretboard hint when editor is open */}
+      {showVoicingEditor && (
+        <div className="mb-1 text-xs text-center" style={{ color: 'var(--accent)' }}>
+          Click a note on the fretboard to fill it into the editor below
+        </div>
+      )}
+
       <div className="overflow-x-auto">
-        <FretBoard chordNotes={chord.notes} tuning={tuning} capoSettings={capoSettings} />
+        <FretboardDiagram
+          chordNotes={chord.notes}
+          tuning={tuning}
+          capoSettings={capoSettings}
+          onFretClick={handleFretClick}
+        />
       </div>
+
+      {/* Inline voicing editor */}
+      {showVoicingEditor && (
+        <ChordVoicingEditor
+          ref={voicingEditorRef}
+          tuning={tuning}
+          initialFrets={chord.voicing?.tuningId === tuning.id ? chord.voicing.frets : undefined}
+          chordName={chord.name}
+          onApply={(frets) => {
+            if (onUpdateVoicing) {
+              onUpdateVoicing(index, { frets, tuningId: tuning.id });
+            }
+            setShowVoicingEditor(false);
+          }}
+          onCancel={() => setShowVoicingEditor(false)}
+        />
+      )}
       </div>
     </div>
   );

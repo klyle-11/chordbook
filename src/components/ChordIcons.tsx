@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Chord } from '../types/chord';
 import type { Tuning } from '../lib/tunings';
 import { isCustomChord } from '../lib/customChordLibrary';
-import { TraditionalChordDiagram } from './TraditionalChordDiagram';
+import { ChordDiagram } from './ChordDiagram';
 
 interface ChordIconsProps {
   chords: Chord[];
@@ -58,7 +58,7 @@ export function ChordIcons({ chords, tuning, className = "" }: ChordIconsProps) 
               {/* Traditional chord diagram flyout (only show on hover if not showing all diagrams) */}
               {!isCustom && !showAllDiagrams && hoveredChord === `${chord.name}-${index}` && (
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 animate-fade-in">
-                  <TraditionalChordDiagram chordName={chord.name} tuning={tuning} />
+                  <ChordDiagram chordName={chord.name} tuning={tuning} />
                 </div>
               )}
             </div>
@@ -100,7 +100,7 @@ export function ChordIcons({ chords, tuning, className = "" }: ChordIconsProps) 
                     transitionDelay: showAllDiagrams ? `${index * 50}ms` : '0ms' 
                   }}
                 >
-                  <TraditionalChordDiagram 
+                  <ChordDiagram 
                     chordName={chord.name} 
                     tuning={tuning} 
                   />

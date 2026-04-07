@@ -1,16 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { getNotesForChord } from './lib/chordUtils';
-import type { Chord as ChordType } from './types/chord';
-import type { Progression } from './types/progression';
 import type { Song } from './types/song';
+import type { ChordVoicing } from './types/chord';
 import { DEFAULT_TUNING, type Tuning, type CapoSettings } from './lib/tunings';
-import { 
-  saveProgressions, 
-  loadProgressions, 
-  saveCurrentProgression, 
-  loadCurrentProgression,
-  generateProgressionId 
-} from './lib/progressionStorage';
 import {
   saveSongs,
   saveCurrentSong,
@@ -18,64 +10,38 @@ import {
   loadCurrentSongAsync,
   migrateLocalStorageToDB,
   generateSongId,
+  generateProgressionId,
   updateProgressionBpm
 } from './lib/songStorage';
+import { loadTheme, saveTheme, applyTheme, type Theme, themes } from './lib/theme';
 
-import DebugStorage from './components/DebugStorage';
 import BackupManager from './components/BackupManager';
 import SongScale from './components/SongScale';
-import VolumeSlider from './components/VolumeSlider';
 import TuningSelector from './components/TuningSelector';
-import { CapoSelector } from './components/CapoSelector';
 import { IntegratedMetronome } from './components/IntegratedMetronome';
 import SongManager from './components/SongManager';
 import SongProgressions from './components/SongProgressions';
+import ThemePicker from './components/ThemePicker';
 
 function App() {
-  // Progression state (existing)
-  const [progression, setProgression] = useState<ChordType[]>([]);
-  const [savedProgressions, setSavedProgressions] = useState<Progression[]>([]);
-  const [currentProgressionId, setCurrentProgressionId] = useState<string | null>(null);
-  const [currentProgressionName, setCurrentProgressionName] = useState<string>('Untitled');
-  
-  // Song state (new)
   const [songs, setSongs] = useState<Song[]>([]);
   const [currentSongId, setCurrentSongId] = useState<string | null>(null);
-  
-  // Other state
   const [currentTuning, setCurrentTuning] = useState<Tuning>(DEFAULT_TUNING);
   const [capoSettings, setCapoSettings] = useState<CapoSettings>({ fret: 0, enabled: false });
   const [currentBpm, setCurrentBpm] = useState<number>(120);
+  const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0]);
 
-  // Load saved progressions on app start
-  useEffect(() => {
-    const progressions = loadProgressions();
-    console.log('Loaded progressions:', progressions);
-    setSavedProgressions(progressions);
-    
-    const currentId = loadCurrentProgression();
-    console.log('Current progression ID:', currentId);
-    if (currentId) {
-      const currentProgression = progressions.find(p => p.id === currentId);
-      console.log('Found current progression:', currentProgression);
-      if (currentProgression) {
-        setCurrentProgressionId(currentId);
-        setProgression(currentProgression.chords);
-        setCurrentProgressionName(currentProgression.name);
-      }
-    }
-  }, []);
-
-  // Load saved songs on app start (async from IndexedDB)
   useEffect(() => {
     async function init() {
+      const theme = await loadTheme();
+      applyTheme(theme);
+      setCurrentTheme(theme);
+
       await migrateLocalStorageToDB();
       const loadedSongs = await loadSongsAsync();
-      console.log('Loaded songs:', loadedSongs);
       setSongs(loadedSongs);
 
       const currentId = await loadCurrentSongAsync();
-      console.log('Current song ID:', currentId);
       if (currentId) {
         setCurrentSongId(currentId);
         const song = loadedSongs.find(s => s.id === currentId);
@@ -89,61 +55,18 @@ function App() {
     init();
   }, []);
 
-  const saveCurrentProgressionToStorage = useCallback(() => {
-    const now = new Date();
-    let progressionToSave: Progression;
-
-    if (currentProgressionId) {
-      // Update existing progression
-      progressionToSave = {
-        id: currentProgressionId,
-        name: currentProgressionName,
-        chords: progression,
-        createdAt: savedProgressions.find(p => p.id === currentProgressionId)?.createdAt || now,
-        updatedAt: now
-      };
-    } else {
-      // Create new progression
-      const newId = generateProgressionId();
-      progressionToSave = {
-        id: newId,
-        name: currentProgressionName,
-        chords: progression,
-        createdAt: now,
-        updatedAt: now
-      };
-      setCurrentProgressionId(newId);
-    }
-
-    const updatedProgressions = currentProgressionId
-      ? savedProgressions.map(p => p.id === currentProgressionId ? progressionToSave : p)
-      : [...savedProgressions, progressionToSave];
-
-    setSavedProgressions(updatedProgressions);
-    saveProgressions(updatedProgressions);
-    saveCurrentProgression(progressionToSave.id);
-  }, [currentProgressionId, currentProgressionName, progression, savedProgressions]);
-
-  // Auto-save current progression whenever it changes
-  useEffect(() => {
-    const saveProgression = () => {
-      if (progression.length > 0) {
-        saveCurrentProgressionToStorage();
-      }
-    };
-    
-    saveProgression();
-  }, [progression, currentProgressionId, currentProgressionName, saveCurrentProgressionToStorage]);
+  function handleThemeChange(theme: Theme) {
+    applyTheme(theme);
+    setCurrentTheme(theme);
+    saveTheme(theme.id);
+  }
 
   function handleTuningChange(tuning: Tuning) {
     setCurrentTuning(tuning);
     if (!currentSongId) return;
-
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song =>
-        song.id === currentSongId
-          ? { ...song, tuning, updatedAt: new Date() }
-          : song
+        song.id === currentSongId ? { ...song, tuning, updatedAt: new Date() } : song
       );
       saveSongs(updatedSongs);
       return updatedSongs;
@@ -153,50 +76,33 @@ function App() {
   function handleCapoChange(capo: CapoSettings) {
     setCapoSettings(capo);
     if (!currentSongId) return;
-
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song =>
-        song.id === currentSongId
-          ? { ...song, capoSettings: capo, updatedAt: new Date() }
-          : song
+        song.id === currentSongId ? { ...song, capoSettings: capo, updatedAt: new Date() } : song
       );
       saveSongs(updatedSongs);
       return updatedSongs;
     });
   }
 
-  // BPM handlers for songs and progressions
   function handleSongBpmChange(songId: string, newBpm: number) {
     setSongs(prevSongs => {
-      const updatedSongs = prevSongs.map(song => 
+      const updatedSongs = prevSongs.map(song =>
         song.id === songId ? { ...song, bpm: newBpm } : song
       );
       saveSongs(updatedSongs);
       return updatedSongs;
     });
-    
-    // Update metronome BPM if this is the current song
-    if (songId === currentSongId) {
-      setCurrentBpm(newBpm);
-    }
+    if (songId === currentSongId) setCurrentBpm(newBpm);
   }
 
   function handleSelectSong(song: Song) {
-    // Update song's lastOpened timestamp
-    const updatedSong = {
-      ...song,
-      lastOpened: new Date()
-    };
-
-    // Update the song in the songs list
+    const updatedSong = { ...song, lastOpened: new Date() };
     const updatedSongs = songs.map(s => s.id === song.id ? updatedSong : s);
     setSongs(updatedSongs);
     saveSongs(updatedSongs);
-
     setCurrentSongId(song.id);
     saveCurrentSong(song.id);
-
-    // Restore song's tuning, capo, and BPM
     setCurrentTuning(song.tuning || DEFAULT_TUNING);
     setCapoSettings(song.capoSettings || { fret: 0, enabled: false });
     setCurrentBpm(song.bpm || 120);
@@ -204,33 +110,28 @@ function App() {
 
   function handleCreateSong(name: string) {
     const now = new Date();
-    const defaultProgression = {
-      id: generateProgressionId(),
-      name: 'Progression 1',
-      chords: [],
-      bpm: 120,
-      createdAt: now,
-      updatedAt: now
-    };
-    
     const newSong: Song = {
       id: generateSongId(),
       name,
       bpm: 120,
-      progressions: [defaultProgression],
+      progressions: [{
+        id: generateProgressionId(),
+        name: 'Progression 1',
+        chords: [],
+        bpm: 120,
+        createdAt: now,
+        updatedAt: now
+      }],
       tuning: DEFAULT_TUNING,
       capoSettings: { fret: 0, enabled: false },
       createdAt: now,
       updatedAt: now
     };
-    
     setSongs(prevSongs => {
       const updatedSongs = [...prevSongs, newSong];
       saveSongs(updatedSongs);
       return updatedSongs;
     });
-    
-    // Select the new song and reset tuning/capo to defaults
     setCurrentSongId(newSong.id);
     saveCurrentSong(newSong.id);
     setCurrentTuning(DEFAULT_TUNING);
@@ -240,10 +141,8 @@ function App() {
 
   function handleRenameSong(songId: string, newName: string) {
     setSongs(prevSongs => {
-      const updatedSongs = prevSongs.map(song => 
-        song.id === songId 
-          ? { ...song, name: newName, updatedAt: new Date() }
-          : song
+      const updatedSongs = prevSongs.map(song =>
+        song.id === songId ? { ...song, name: newName, updatedAt: new Date() } : song
       );
       saveSongs(updatedSongs);
       return updatedSongs;
@@ -256,8 +155,6 @@ function App() {
       saveSongs(updatedSongs);
       return updatedSongs;
     });
-    
-    // If deleting current song, clear selection
     if (currentSongId === songId) {
       setCurrentSongId(null);
       saveCurrentSong('');
@@ -271,31 +168,25 @@ function App() {
 
   function handleUpdateProgressionBpm(progressionId: string, bpm: number) {
     if (!currentSongId) return;
-    
     setSongs(prevSongs => {
-      const updatedSongs = prevSongs.map(song => 
-        song.id === currentSongId 
-          ? updateProgressionBpm(song, progressionId, bpm)
-          : song
+      const updatedSongs = prevSongs.map(song =>
+        song.id === currentSongId ? updateProgressionBpm(song, progressionId, bpm) : song
       );
       saveSongs(updatedSongs);
       return updatedSongs;
     });
-    
-    // Update metronome BPM
     setCurrentBpm(bpm);
   }
 
   function handleReorderProgressions(oldIndex: number, newIndex: number) {
     if (!currentSongId) return;
-    
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
         if (song.id === currentSongId) {
-          const updatedProgressions = [...song.progressions];
-          const [reorderedItem] = updatedProgressions.splice(oldIndex, 1);
-          updatedProgressions.splice(newIndex, 0, reorderedItem);
-          return { ...song, progressions: updatedProgressions, updatedAt: new Date() };
+          const p = [...song.progressions];
+          const [item] = p.splice(oldIndex, 1);
+          p.splice(newIndex, 0, item);
+          return { ...song, progressions: p, updatedAt: new Date() };
         }
         return song;
       });
@@ -306,14 +197,11 @@ function App() {
 
   function handleEditProgression(progressionId: string, field: 'name', value: string) {
     if (!currentSongId || field !== 'name') return;
-    
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
         if (song.id === currentSongId) {
-          const updatedProgressions = song.progressions.map(p => 
-            p.id === progressionId 
-              ? { ...p, name: value, updatedAt: new Date() }
-              : p
+          const updatedProgressions = song.progressions.map(p =>
+            p.id === progressionId ? { ...p, name: value, updatedAt: new Date() } : p
           );
           return { ...song, progressions: updatedProgressions, updatedAt: new Date() };
         }
@@ -326,12 +214,10 @@ function App() {
 
   function handleDeleteProgression(progressionId: string) {
     if (!currentSongId) return;
-    
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
         if (song.id === currentSongId) {
-          const updatedProgressions = song.progressions.filter(p => p.id !== progressionId);
-          return { ...song, progressions: updatedProgressions, updatedAt: new Date() };
+          return { ...song, progressions: song.progressions.filter(p => p.id !== progressionId), updatedAt: new Date() };
         }
         return song;
       });
@@ -344,18 +230,16 @@ function App() {
     const now = new Date();
     const newProgression = {
       id: generateProgressionId(),
-      name: `Progression ${Date.now()}`, // Unique name based on timestamp
+      name: `Progression ${Date.now()}`,
       chords: [],
       bpm: songs.find(s => s.id === songId)?.bpm || 120,
       createdAt: now,
       updatedAt: now
     };
-    
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
         if (song.id === songId) {
-          const updatedProgressions = [...song.progressions, newProgression];
-          return { ...song, progressions: updatedProgressions, updatedAt: now };
+          return { ...song, progressions: [...song.progressions, newProgression], updatedAt: now };
         }
         return song;
       });
@@ -364,19 +248,17 @@ function App() {
     });
   }
 
-
   function handleChordReorder(progressionId: string, oldIndex: number, newIndex: number) {
     if (!currentSongId) return;
-    
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
         if (song.id === currentSongId) {
           const updatedProgressions = song.progressions.map(p => {
             if (p.id === progressionId) {
-              const updatedChords = [...p.chords];
-              const [reorderedItem] = updatedChords.splice(oldIndex, 1);
-              updatedChords.splice(newIndex, 0, reorderedItem);
-              return { ...p, chords: updatedChords, updatedAt: new Date() };
+              const c = [...p.chords];
+              const [item] = c.splice(oldIndex, 1);
+              c.splice(newIndex, 0, item);
+              return { ...p, chords: c, updatedAt: new Date() };
             }
             return p;
           });
@@ -390,19 +272,39 @@ function App() {
   }
 
   function handleChordReplace(progressionId: string, chordIndex: number) {
-    // This would trigger chord replacement mode
     console.log('Replace chord at index', chordIndex, 'in progression', progressionId);
   }
 
   function handleChordRemove(progressionId: string, chordIndex: number) {
     if (!currentSongId) return;
-    
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
         if (song.id === currentSongId) {
           const updatedProgressions = song.progressions.map(p => {
             if (p.id === progressionId) {
-              const updatedChords = p.chords.filter((_, index) => index !== chordIndex);
+              return { ...p, chords: p.chords.filter((_, i) => i !== chordIndex), updatedAt: new Date() };
+            }
+            return p;
+          });
+          return { ...song, progressions: updatedProgressions, updatedAt: new Date() };
+        }
+        return song;
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
+  function handleUpdateChordVoicing(progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) {
+    if (!currentSongId) return;
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === currentSongId) {
+          const updatedProgressions = song.progressions.map(p => {
+            if (p.id === progressionId) {
+              const updatedChords = p.chords.map((c, i) =>
+                i === chordIndex ? { ...c, voicing } : c
+              );
               return { ...p, chords: updatedChords, updatedAt: new Date() };
             }
             return p;
@@ -418,10 +320,8 @@ function App() {
 
   function handleAddChord(progressionId: string, chordName: string) {
     if (!currentSongId) return;
-    
     const notes = getNotesForChord(chordName);
     const newChord = { name: chordName, notes };
-    
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
         if (song.id === currentSongId) {
@@ -440,71 +340,92 @@ function App() {
     });
   }
 
+  const currentSong = currentSongId ? songs.find(s => s.id === currentSongId) ?? null : null;
+
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-4 sm:p-8">
-      <VolumeSlider />
-      <h1 
-        className="text-2xl sm:text-3xl font-bold text-center mb-6 sm:mb-8 text-gray-800 cursor-pointer hover:text-blue-600 transition-colors duration-200"
-        onClick={handleBackToOverview}
-      >
-        Chordbook
-      </h1>
-      
-      {/* Integrated Metronome and Auto Scroll Controls */}
-      <div className="mb-4 sm:mb-6">
-        <IntegratedMetronome 
-          onTempoChange={setCurrentBpm} 
-          currentBpm={currentBpm}
-        />
-      </div>
-      
-      {/* Tuning and Capo Controls */}
-      <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 mb-4 sm:mb-6">
-        <div className="w-full sm:w-auto">
-          <TuningSelector
-            currentTuning={currentTuning}
-            onTuningChange={handleTuningChange}
-          />
-        </div>
-        
-        <div className="w-full sm:w-auto">
-          <CapoSelector
-            capoSettings={capoSettings}
-            onCapoChange={handleCapoChange}
-          />
-        </div>
-      </div>
+    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
 
-      {/* Song Manager */}
-      <div className="mb-6 sm:mb-8">
-        <SongManager 
-          songs={songs}
-          currentSong={songs.find(song => song.id === currentSongId) || null}
-          onSelectSong={handleSelectSong}
-          onCreateSong={handleCreateSong}
-          onRenameSong={handleRenameSong}
-          onUpdateSongBpm={handleSongBpmChange}
-          onDeleteSong={handleDeleteSong}
-          onBackToOverview={handleBackToOverview}
-        />
-      </div>
-
-      {/* Song Scale Analysis */}
-      {currentSongId && (() => {
-        const currentSong = songs.find(song => song.id === currentSongId);
-        return currentSong ? (
-          <div className="mb-6 sm:mb-8">
-            <SongScale song={currentSong} />
+      {/* ─── Sticky Header ─── */}
+      <div className="sticky-header">
+        {/* Brand row */}
+        <header className="sticky-header__brand">
+          <div className="app-container flex items-center justify-between py-3">
+            <h1
+              className="text-xl font-bold cursor-pointer transition-colors"
+              style={{ fontFamily: 'var(--font-body)', color: 'var(--text)', letterSpacing: '-0.02em' }}
+              onClick={handleBackToOverview}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text)')}
+            >
+              Chordbook
+            </h1>
+            <ThemePicker currentTheme={currentTheme} onThemeChange={handleThemeChange} />
           </div>
-        ) : null;
-      })()}
+        </header>
 
-      {/* Song Progressions */}
-      {currentSongId && (() => {
-        const currentSong = songs.find(song => song.id === currentSongId);
-        return currentSong ? (
-          <div className="mb-6 sm:mb-8">
-            <SongProgressions 
+        {/* Toolbar row */}
+        <div className="sticky-header__toolbar">
+          <div className="app-container py-2">
+            <div className="toolbar-row">
+              <IntegratedMetronome onTempoChange={setCurrentBpm} currentBpm={currentBpm} />
+              <TuningSelector
+                currentTuning={currentTuning}
+                onTuningChange={handleTuningChange}
+                capoSettings={capoSettings}
+                onCapoChange={handleCapoChange}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Song info row (only when a song is open) */}
+        {currentSong && (
+          <div className="sticky-header__song-info">
+            <div className="app-container">
+              <SongManager
+                songs={songs}
+                currentSong={currentSong}
+                onSelectSong={handleSelectSong}
+                onCreateSong={handleCreateSong}
+                onRenameSong={handleRenameSong}
+                onUpdateSongBpm={handleSongBpmChange}
+                onDeleteSong={handleDeleteSong}
+                onBackToOverview={handleBackToOverview}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ─── Main Content ─── */}
+      <main className="app-container py-8 space-y-8">
+        {/* Song Manager (overview only — when no song is open) */}
+        {!currentSong && (
+          <section>
+            <SongManager
+              songs={songs}
+              currentSong={null}
+              onSelectSong={handleSelectSong}
+              onCreateSong={handleCreateSong}
+              onRenameSong={handleRenameSong}
+              onUpdateSongBpm={handleSongBpmChange}
+              onDeleteSong={handleDeleteSong}
+              onBackToOverview={handleBackToOverview}
+            />
+          </section>
+        )}
+
+        {/* Song Scale Analysis */}
+        {currentSong && (
+          <section>
+            <SongScale song={currentSong} />
+          </section>
+        )}
+
+        {/* Song Progressions */}
+        {currentSong && (
+          <section>
+            <SongProgressions
               progressions={currentSong.progressions || []}
               onReorderProgressions={handleReorderProgressions}
               onEditProgression={handleEditProgression}
@@ -513,22 +434,21 @@ function App() {
               onChordReorder={handleChordReorder}
               onChordReplace={handleChordReplace}
               onChordRemove={handleChordRemove}
+              onUpdateChordVoicing={handleUpdateChordVoicing}
               onAddChord={handleAddChord}
-              onAddProgression={() => handleAddProgression(currentSongId)}
+              onAddProgression={() => handleAddProgression(currentSongId!)}
               tuning={currentTuning}
               capoSettings={capoSettings}
               bpm={currentBpm}
             />
-          </div>
-        ) : null;
-      })()}
+          </section>
+        )}
 
-      {/* Data Management - Bottom Section */}
-      <div className="mt-12 sm:mt-16 w-full sm:w-1/2 mx-auto px-2 sm:px-0">
-        <BackupManager onDataRestored={() => window.location.reload()} />
-      </div>
-      
-      <DebugStorage />
+        {/* Backup */}
+        <section className="max-w-xl mx-auto pt-8">
+          <BackupManager onDataRestored={() => window.location.reload()} />
+        </section>
+      </main>
     </div>
   )
 }

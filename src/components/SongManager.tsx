@@ -32,11 +32,10 @@ export default function SongManager({
   const [showPDFExport, setShowPDFExport] = useState(false);
   const [showAllSongs, setShowAllSongs] = useState(false);
 
-  // Sort songs by lastOpened date (most recent first)
   const sortedSongs = [...songs].sort((a, b) => {
-    const aLastOpened = a.lastOpened?.getTime() || 0;
-    const bLastOpened = b.lastOpened?.getTime() || 0;
-    return bLastOpened - aLastOpened;
+    const aLast = a.lastOpened?.getTime() || 0;
+    const bLast = b.lastOpened?.getTime() || 0;
+    return bLast - aLast;
   });
 
   const recentSongs = sortedSongs.slice(0, 4);
@@ -51,9 +50,8 @@ export default function SongManager({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleCreateSong();
-    } else if (e.key === 'Escape') {
+    if (e.key === 'Enter') handleCreateSong();
+    else if (e.key === 'Escape') {
       setShowNewSongForm(false);
       setNewSongName('');
     }
@@ -63,182 +61,116 @@ export default function SongManager({
     <div
       key={song.id}
       onClick={() => onSelectSong(song)}
-      className="p-4 sm:p-6 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md cursor-pointer transition-all"
+      className="themed-card themed-card-interactive p-5 cursor-pointer"
     >
       <div className="flex items-start justify-between mb-3">
-        <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate flex-1 pr-2">
+        <h3 className="text-base font-semibold truncate flex-1 pr-2" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>
           {song.name}
         </h3>
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDeleteClick(song.id);
-          }}
-          className="p-1 text-gray-400 hover:text-red-600 transition-colors flex-shrink-0"
+          onClick={(e) => { e.stopPropagation(); setSongToDelete(song.id); }}
+          className="p-1 transition-colors flex-shrink-0"
+          style={{ color: 'var(--text-muted)' }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
         </button>
       </div>
-      
-      <div className="text-sm text-gray-600 mb-3">
-        <div>{song.progressions.length} progression{song.progressions.length !== 1 ? 's' : ''}</div>
-        {song.lastOpened && (
-          <div className="text-gray-400 text-xs mt-1">
-            Last opened: {song.lastOpened.toLocaleDateString()}
-          </div>
-        )}
-      </div>
+
+      <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
+        {song.progressions.length} progression{song.progressions.length !== 1 ? 's' : ''}
+      </p>
+      {song.lastOpened && (
+        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+          Last opened {song.lastOpened.toLocaleDateString()}
+        </p>
+      )}
 
       {showBpmTuning && (
-        <div className="text-sm text-gray-500 mb-3 flex flex-col sm:flex-row gap-1 sm:gap-4">
-          <span>BPM: {song.bpm || 120}</span>
-          <span>Tuning: {song.tuning?.name || DEFAULT_TUNING.name}</span>
-        </div>
+        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+          {song.bpm || 120} BPM &middot; {song.tuning?.name || DEFAULT_TUNING.name}
+        </p>
       )}
 
       {song.progressions.length > 0 && (
-        <div className="flex flex-wrap gap-1 sm:gap-2">
-          {song.progressions.slice(0, 3).map((progression, index) => (
-            <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-              {progression.name}
-            </span>
+        <div className="flex flex-wrap gap-1.5">
+          {song.progressions.slice(0, 3).map((prog, i) => (
+            <span key={i} className="themed-tag">{prog.name}</span>
           ))}
           {song.progressions.length > 3 && (
-            <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded text-xs">
-              +{song.progressions.length - 3} more
-            </span>
+            <span className="themed-tag" style={{ opacity: 0.7 }}>+{song.progressions.length - 3}</span>
           )}
         </div>
       )}
     </div>
   );
 
-  const handleDeleteClick = (songId: string) => {
-    setSongToDelete(songId);
-  };
-
-  const handleConfirmDelete = () => {
-    if (songToDelete) {
-      onDeleteSong(songToDelete);
-      setSongToDelete(null);
-    }
-  };
-
-  const handleCancelDelete = () => {
-    setSongToDelete(null);
-  };
-
-  // If viewing a specific song, show the back button and song title
+  // ─── Song Detail View (compact single-row for sticky header) ───
   if (currentSong) {
     return (
-      <div className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+      <div>
+        <div className="song-header">
+          {/* Left: back + title */}
+          <div className="song-header__left">
             <button
               onClick={onBackToOverview}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors self-start"
+              className="song-header__back"
+              aria-label="Back to all songs"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              All Songs
             </button>
-            <div className="hidden sm:block h-6 w-px bg-gray-300"></div>
-            <div>
-              <EditableText
-                value={currentSong.name}
-                onChange={(newName) => onRenameSong(currentSong.id, newName)}
-                className="text-xl sm:text-2xl font-bold text-gray-900"
-                placeholder="Song name..."
-              />
-              <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-gray-600">
-                    {currentSong.progressions.length} progression{currentSong.progressions.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
-                {onUpdateSongBpm && (
-                  <BpmInput
-                    bpm={currentSong.bpm}
-                    onChange={(bpm) => onUpdateSongBpm(currentSong.id, bpm)}
-                    size="sm"
-                  />
-                )}
-              </div>
-            </div>
+            <EditableText
+              value={currentSong.name}
+              onChange={(name) => onRenameSong(currentSong.id, name)}
+              className="song-header__title"
+              placeholder="Song name..."
+            />
           </div>
-          
-          <div className="flex flex-wrap items-center gap-2">
+
+          {/* Center: meta info */}
+          <div className="song-header__meta">
+            <span className="song-header__meta-item">
+              {currentSong.progressions.length} prog{currentSong.progressions.length !== 1 ? 's' : ''}
+            </span>
+            {onUpdateSongBpm && (
+              <>
+                <span className="song-header__meta-sep" />
+                <BpmInput bpm={currentSong.bpm} onChange={(bpm) => onUpdateSongBpm(currentSong.id, bpm)} size="sm" />
+              </>
+            )}
+          </div>
+
+          {/* Right: actions */}
+          <div className="song-header__actions">
             <button
-              onClick={() => {
-                console.log('PDF Export button clicked, showPDFExport:', showPDFExport);
-                setShowPDFExport(true);
-                console.log('After setShowPDFExport(true)');
-              }}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
+              onClick={() => setShowPDFExport(true)}
+              className="song-header__action-btn"
+              title="Export PDF"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <span className="hidden sm:inline">Export PDF</span>
-              <span className="sm:hidden">PDF</span>
+              <span className="song-header__action-label">PDF</span>
             </button>
-            
             <button
-              onClick={() => handleDeleteClick(currentSong.id)}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+              onClick={() => setSongToDelete(currentSong.id)}
+              className="song-header__action-btn song-header__action-btn--danger"
+              title="Delete song"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
-              <span className="hidden sm:inline">Delete Song</span>
-              <span className="sm:hidden">Delete</span>
             </button>
           </div>
         </div>
 
-        {/* Delete Confirmation Dialog */}
-        {songToDelete === currentSong.id && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-1.964-.833-2.732 0l-8.998 10c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Delete Song</h3>
-                  <p className="text-sm text-gray-600">This action cannot be undone</p>
-                </div>
-              </div>
-              
-              <p className="text-gray-700 mb-6">
-                Are you sure you want to delete "<strong>{currentSong.name}</strong>"? 
-                This will permanently remove the song and all {currentSong.progressions.length} progression{currentSong.progressions.length !== 1 ? 's' : ''} it contains.
-              </p>
-              
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={handleCancelDelete}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmDelete}
-                  className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-md transition-colors"
-                >
-                  Delete Song
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {renderDeleteDialog()}
 
-        {/* PDF Export Dialog (visible while viewing a specific song) */}
         <PDFExportDialog
           song={currentSong}
           isOpen={showPDFExport}
@@ -248,15 +180,14 @@ export default function SongManager({
     );
   }
 
-  // Show song overview/selection
+  // ─── Song Overview ───
   return (
-    <div className="mb-6 sm:mb-8">
+    <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Songs</h2>
-        <button
-          onClick={() => setShowNewSongForm(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors w-full sm:w-auto"
-        >
+        <h2 className="text-xl sm:text-2xl font-bold" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>
+          Songs
+        </h2>
+        <button onClick={() => setShowNewSongForm(true)} className="themed-btn-primary flex items-center justify-center gap-2 w-full sm:w-auto">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
@@ -264,9 +195,8 @@ export default function SongManager({
         </button>
       </div>
 
-      {/* New Song Form */}
       {showNewSongForm && (
-        <div className="mb-6 p-4 border border-blue-200 rounded-lg bg-blue-50">
+        <div className="mb-6 p-4 rounded-xl" style={{ background: 'var(--accent-subtle)', border: '1px solid var(--border)' }}>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <input
               type="text"
@@ -274,24 +204,14 @@ export default function SongManager({
               onChange={(e) => setNewSongName(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Enter song name..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="themed-input flex-1"
               autoFocus
             />
             <div className="flex gap-2">
-              <button
-                onClick={handleCreateSong}
-                disabled={!newSongName.trim()}
-                className="flex-1 sm:flex-none px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
+              <button onClick={handleCreateSong} disabled={!newSongName.trim()} className="themed-btn-primary flex-1 sm:flex-none">
                 Create
               </button>
-              <button
-                onClick={() => {
-                  setShowNewSongForm(false);
-                  setNewSongName('');
-                }}
-                className="flex-1 sm:flex-none px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
-              >
+              <button onClick={() => { setShowNewSongForm(false); setNewSongName(''); }} className="themed-btn-secondary flex-1 sm:flex-none">
                 Cancel
               </button>
             </div>
@@ -299,109 +219,84 @@ export default function SongManager({
         </div>
       )}
 
-      {/* Songs List */}
       {songs.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <div className="text-6xl mb-4">🎵</div>
-          <p className="text-lg text-gray-600 mb-2">No songs yet</p>
-          <p className="text-sm text-gray-500">Create your first song to get started</p>
+        <div className="text-center py-16 rounded-xl" style={{ background: 'var(--bg-secondary)' }}>
+          <p className="text-lg mb-2" style={{ color: 'var(--text-secondary)' }}>No songs yet</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Create your first song to get started</p>
         </div>
       ) : (
-        <div className="space-y-6 sm:space-y-8">
-          {/* Recent Songs Section */}
+        <div className="space-y-8">
           {recentSongs.length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Songs</h3>
-              <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-                {recentSongs.map((song) => renderSongCard(song))}
+              <h3 className="text-base font-semibold mb-4" style={{ fontFamily: 'var(--font-body)', color: 'var(--text-secondary)' }}>
+                Recent
+              </h3>
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                {recentSongs.map(song => renderSongCard(song))}
               </div>
             </div>
           )}
 
-          {/* All Songs File Picker */}
           {remainingSongs.length > 0 && (
             <div>
               <button
                 onClick={() => setShowAllSongs(!showAllSongs)}
-                className="flex items-center gap-2 text-base sm:text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors mb-4"
+                className="flex items-center gap-2 text-base font-semibold mb-4 transition-colors"
+                style={{ fontFamily: 'var(--font-body)', color: 'var(--text-secondary)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
               >
-                <svg 
-                  className={`w-5 h-5 transition-transform ${showAllSongs ? 'rotate-90' : ''}`} 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
+                <svg className={`w-4 h-4 transition-transform ${showAllSongs ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
                 All Songs ({remainingSongs.length})
               </button>
-              
               {showAllSongs && (
-                <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                  {remainingSongs.map((song) => renderSongCard(song, true))}
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  {remainingSongs.map(song => renderSongCard(song, true))}
                 </div>
               )}
             </div>
           )}
-
-          {/* Show all songs in a single grid if no recent songs */}
-          {recentSongs.length === 0 && (
-            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {sortedSongs.map((song) => renderSongCard(song, true))}
-            </div>
-          )}
         </div>
       )}
 
-            {/* Delete Confirmation Dialog for Overview */}
-      {songToDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-shrink-0">
-                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-1.964-.833-2.732 0l-8.998 10c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Delete Song</h3>
-                <p className="text-sm text-gray-600">This action cannot be undone</p>
-              </div>
-            </div>
-            
-            {(() => {
-              const songToDeleteData = songs.find(s => s.id === songToDelete);
-              return songToDeleteData ? (
-                <p className="text-gray-700 mb-6 text-sm sm:text-base">
-                  Are you sure you want to delete "<strong className="break-words">{songToDeleteData.name}</strong>"? 
-                  This will permanently remove the song and all {songToDeleteData.progressions.length} progression{songToDeleteData.progressions.length !== 1 ? 's' : ''} it contains.
-                </p>
-              ) : (
-                <p className="text-gray-700 mb-6 text-sm sm:text-base">
-                  Are you sure you want to delete this song? This action cannot be undone.
-                </p>
-              );
-            })()}
-            
-            <div className="flex flex-col sm:flex-row gap-3 justify-end">
-              <button
-                onClick={handleCancelDelete}
-                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors order-2 sm:order-1"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-md transition-colors order-1 sm:order-2"
-              >
-                Delete Song
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-  {/* PDF Export Dialog (not rendered on overview since no currentSong) */}
+      {renderDeleteDialog()}
     </div>
   );
+
+  function renderDeleteDialog() {
+    if (!songToDelete) return null;
+    const songData = songs.find(s => s.id === songToDelete);
+
+    return (
+      <div className="fixed inset-0 themed-overlay flex items-center justify-center z-50 p-4">
+        <div className="themed-dialog p-6 max-w-md w-full animate-fade-in">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'var(--danger-subtle)' }}>
+              <svg className="w-5 h-5" style={{ color: 'var(--danger)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-1.964-.833-2.732 0l-8.998 10c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>Delete Song</h3>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>This action cannot be undone</p>
+            </div>
+          </div>
+
+          {songData && (
+            <p className="mb-6" style={{ color: 'var(--text-secondary)' }}>
+              Are you sure you want to delete "<strong>{songData.name}</strong>"?
+              This will remove {songData.progressions.length} progression{songData.progressions.length !== 1 ? 's' : ''}.
+            </p>
+          )}
+
+          <div className="flex gap-3 justify-end">
+            <button onClick={() => setSongToDelete(null)} className="themed-btn-secondary">Cancel</button>
+            <button onClick={() => { if (songToDelete) { onDeleteSong(songToDelete); setSongToDelete(null); } }} className="themed-btn-danger">Delete</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 }

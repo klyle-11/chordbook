@@ -3,19 +3,19 @@ import { getFretPositions } from "../lib/fretPositions";
 import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable, applyCapo } from "../lib/tunings";
 import FretMarker from "./FretMarker";
 
-interface FretBoardProps {
+interface FretboardDiagramProps {
     chordNotes: string[];
     tuning: Tuning;
     capoSettings: CapoSettings;
+    onFretClick?: (stringIndex: number, fret: number, note: string) => void;
 }
 
-export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoardProps) {
-    const effectiveTuning = capoSettings.enabled && capoSettings.fret > 0 
-        ? applyCapo(tuning, capoSettings.fret) 
+export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick }: FretboardDiagramProps) {
+    const effectiveTuning = capoSettings.enabled && capoSettings.fret > 0
+        ? applyCapo(tuning, capoSettings.fret)
         : tuning;
     const strings = getTuningStrings(effectiveTuning);
     const fretPositions = getFretPositions();
-    
     return (
         <div className="mt-3 p-2 sm:p-3 bg-gray-100 rounded-lg border border-gray-200">
             <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-800">
@@ -28,14 +28,11 @@ export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoar
             </h3>
             <div className="space-y-0.5 sm:space-y-1">
                 {strings.map((stringRoot, stringIndex) => {
-                    const markers = chordNotes.flatMap((note) => 
+                    const markers = chordNotes.flatMap((note) =>
                         getFretsForNoteOnString(stringRoot, note)
-                            .filter(fret => fret <= 24) // Limit to 24 frets
+                            .filter(fret => fret <= 24)
                             .filter(fret => isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0))
-                            .map((fret) => ({
-                                note,
-                                fret,
-                            }))
+                            .map((fret) => ({ note, fret }))
                     );
                 
                     return (
@@ -82,6 +79,7 @@ export default function Fretboard({ chordNotes, tuning, capoSettings }: FretBoar
                                         guitarString={stringRoot}
                                         stringIndex={stringIndex}
                                         tuning={tuning}
+                                        onFretClick={onFretClick}
                                     />
                                 ))}
                             </div>

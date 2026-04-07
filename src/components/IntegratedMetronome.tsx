@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { audioPlayer } from '../lib/audioPlayer';
 
 interface IntegratedMetronomeProps {
   onTempoChange?: (bpm: number) => void;
@@ -9,36 +10,25 @@ export function IntegratedMetronome({ onTempoChange, currentBpm }: IntegratedMet
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const [bpm, setBpm] = useState(currentBpm || 120);
-  const [bpmInput, setBpmInput] = useState(String(currentBpm || 120)); // Separate state for input display
-  const [volume, setVolume] = useState(0.5);
-  
-  // Metronome refs
+  const [bpmInput, setBpmInput] = useState(String(currentBpm || 120));
+  const [clickVolume, setClickVolume] = useState(0.5);
+  const [masterVolume, setMasterVolume] = useState(audioPlayer.getVolume());
+  const [isMasterMuted, setIsMasterMuted] = useState(false);
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const bpmValidationTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Auto-scroll refs
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentChordIndex = useRef<number>(0);
 
   useEffect(() => {
-    // Initialize Web Audio API
     const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     audioContextRef.current = new AudioContextClass();
-    
-    return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
+    return () => { audioContextRef.current?.close(); };
   }, []);
 
-  useEffect(() => {
-    onTempoChange?.(bpm);
-  }, [bpm, onTempoChange]);
+  useEffect(() => { onTempoChange?.(bpm); }, [bpm, onTempoChange]);
 
-  // Sync with external BPM changes (e.g., when switching songs)
-  // Only update if there's a significant difference to avoid feedback loops
   useEffect(() => {
     if (currentBpm !== undefined && Math.abs(currentBpm - bpm) > 0.1) {
       setBpm(currentBpm);
@@ -46,308 +36,233 @@ export function IntegratedMetronome({ onTempoChange, currentBpm }: IntegratedMet
     }
   }, [currentBpm]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sync master volume to audioPlayer
+  useEffect(() => {
+    audioPlayer.setVolume(isMasterMuted ? 0 : masterVolume);
+  }, [masterVolume, isMasterMuted]);
+
   const playClick = useCallback(() => {
     if (!audioContextRef.current) return;
-
     const context = audioContextRef.current;
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
-
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
-
     oscillator.frequency.setValueAtTime(800, context.currentTime);
     oscillator.type = 'sine';
-
     gainNode.gain.setValueAtTime(0, context.currentTime);
-    gainNode.gain.linearRampToValueAtTime(volume, context.currentTime + 0.01);
+    gainNode.gain.linearRampToValueAtTime(clickVolume, context.currentTime + 0.01);
     gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1);
-
     oscillator.start(context.currentTime);
     oscillator.stop(context.currentTime + 0.1);
-  }, [volume]);
+  }, [clickVolume]);
 
   const startMetronome = useCallback(() => {
     if (intervalRef.current) return;
-
-    const interval = 60000 / bpm; // Convert BPM to milliseconds
-    playClick(); // Play immediately
-    
-    intervalRef.current = setInterval(() => {
-      playClick();
-    }, interval);
-
+    const interval = 60000 / bpm;
+    playClick();
+    intervalRef.current = setInterval(() => { playClick(); }, interval);
     setIsPlaying(true);
   }, [bpm, playClick]);
 
   const stopMetronome = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     setIsPlaying(false);
   }, []);
 
   const startAutoScroll = useCallback(() => {
     if (scrollIntervalRef.current) return;
-
-    // Calculate interval based on BPM divided by 4 (quarter note speed)
-    const interval = (60000 / bpm) * 4; // milliseconds per chord (4 beats per chord)
+    const interval = (60000 / bpm) * 4;
     currentChordIndex.current = 0;
-
     const scrollToNextChord = () => {
-      // Find all chord diagram elements
       const chordElements = document.querySelectorAll('[data-chord-diagram]');
-      
       if (chordElements.length === 0) return;
-
-      // If we've reached the end, scroll back to top and reset
       if (currentChordIndex.current >= chordElements.length) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         currentChordIndex.current = 0;
         return;
       }
-
-      // Scroll to current chord
-      const currentChord = chordElements[currentChordIndex.current];
-      currentChord.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'center' 
-      });
-
+      chordElements[currentChordIndex.current].scrollIntoView({ behavior: 'smooth', block: 'center' });
       currentChordIndex.current++;
     };
-
-    // Start immediately
     scrollToNextChord();
-    
     scrollIntervalRef.current = setInterval(scrollToNextChord, interval);
     setIsScrolling(true);
   }, [bpm]);
 
   const stopAutoScroll = useCallback(() => {
-    if (scrollIntervalRef.current) {
-      clearInterval(scrollIntervalRef.current);
-      scrollIntervalRef.current = null;
-    }
+    if (scrollIntervalRef.current) { clearInterval(scrollIntervalRef.current); scrollIntervalRef.current = null; }
     setIsScrolling(false);
     currentChordIndex.current = 0;
   }, []);
 
-  // Update scroll timing if BPM changes while scrolling
   useEffect(() => {
     if (isScrolling && scrollIntervalRef.current) {
-      // Restart with new BPM
       clearInterval(scrollIntervalRef.current);
       scrollIntervalRef.current = null;
-      
-      const interval = (60000 / bpm) * 4; // BPM divided by 4
+      const interval = (60000 / bpm) * 4;
       const scrollToNextChord = () => {
         const chordElements = document.querySelectorAll('[data-chord-diagram]');
-        
         if (chordElements.length === 0) return;
-
         if (currentChordIndex.current >= chordElements.length) {
           window.scrollTo({ top: 0, behavior: 'smooth' });
           currentChordIndex.current = 0;
           return;
         }
-
-        const currentChord = chordElements[currentChordIndex.current];
-        currentChord.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
-        });
-
+        chordElements[currentChordIndex.current].scrollIntoView({ behavior: 'smooth', block: 'center' });
         currentChordIndex.current++;
       };
-
       scrollIntervalRef.current = setInterval(scrollToNextChord, interval);
     }
   }, [bpm, isScrolling]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const activeElement = document.activeElement;
       const isInputFocused = activeElement && (
-        activeElement.tagName === 'INPUT' ||
-        activeElement.tagName === 'TEXTAREA' ||
-        activeElement.tagName === 'SELECT' ||
-        (activeElement as HTMLElement).contentEditable === 'true'
+        activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' ||
+        activeElement.tagName === 'SELECT' || (activeElement as HTMLElement).contentEditable === 'true'
       );
-
-      // Handle Escape key to stop autoscroll
-      if (event.key === 'Escape' && isScrolling) {
-        event.preventDefault();
-        stopAutoScroll();
-      }
-
-      // Handle Spacebar to toggle autoscroll (only if not in input)
+      if (event.key === 'Escape' && isScrolling) { event.preventDefault(); stopAutoScroll(); }
       if (event.key === ' ' && !isInputFocused) {
         event.preventDefault();
-        if (isScrolling) {
-          stopAutoScroll();
-        } else {
-          startAutoScroll();
-        }
+        isScrolling ? stopAutoScroll() : startAutoScroll();
       }
     };
-
     document.addEventListener('keydown', handleKeyDown);
-
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-      if (scrollIntervalRef.current) {
-        clearInterval(scrollIntervalRef.current);
-      }
-      if (bpmValidationTimerRef.current) {
-        clearTimeout(bpmValidationTimerRef.current);
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+      if (bpmValidationTimerRef.current) clearTimeout(bpmValidationTimerRef.current);
     };
   }, [isScrolling, startAutoScroll, stopAutoScroll]);
 
   const validateAndSetBpm = useCallback((value: string) => {
-    if (value === '') {
-      setBpm(120);
-      setBpmInput('120');
-      return;
-    }
-    
+    if (value === '') { setBpm(120); setBpmInput('120'); return; }
     const newBpm = parseInt(value, 10);
     if (!isNaN(newBpm)) {
-      // Clamp the value between 40 and 300
       const clampedBpm = Math.max(40, Math.min(300, newBpm));
       setBpm(clampedBpm);
       setBpmInput(clampedBpm.toString());
-      
-      // If playing, restart with new tempo
-      if (isPlaying) {
-        stopMetronome();
-        setTimeout(() => startMetronome(), 50);
-      }
+      if (isPlaying) { stopMetronome(); setTimeout(() => startMetronome(), 50); }
     }
   }, [isPlaying, stopMetronome, startMetronome]);
 
   const handleBpmChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    
-    // Update the input display immediately (allow any input while typing)
     setBpmInput(value);
-    
-    // Clear any existing timer
-    if (bpmValidationTimerRef.current) {
-      clearTimeout(bpmValidationTimerRef.current);
-    }
-    
-    // Set a timer to validate after 3 seconds of no typing
-    bpmValidationTimerRef.current = setTimeout(() => {
-      validateAndSetBpm(value);
-    }, 3000);
+    if (bpmValidationTimerRef.current) clearTimeout(bpmValidationTimerRef.current);
+    bpmValidationTimerRef.current = setTimeout(() => { validateAndSetBpm(value); }, 3000);
   };
 
   const handleBpmBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    // Clear the timer since we're validating on blur
-    if (bpmValidationTimerRef.current) {
-      clearTimeout(bpmValidationTimerRef.current);
-    }
-    
-    // Validate immediately when user clicks away
+    if (bpmValidationTimerRef.current) clearTimeout(bpmValidationTimerRef.current);
     validateAndSetBpm(e.target.value);
   };
 
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setVolume(parseFloat(e.target.value));
-  };
+  const displayMasterVol = isMasterMuted ? 0 : masterVolume;
 
   return (
     <>
-      <div className="inline-flex items-center space-x-4 px-5 py-3 bg-gray-50 border border-gray-200 rounded-lg">
-        {/* Play/Stop Button */}
-        <button
-          onClick={isPlaying ? stopMetronome : startMetronome}
-          className="px-4 py-2 rounded font-medium transition-colors bg-gray-300 text-gray-700 hover:bg-gray-400 hover:text-white"
-        >
-          {isPlaying ? '⏸️' : '▶️'}
-        </button>
+      <div className="playback-strip">
+        {/* Transport */}
+        <div className="playback-strip__group">
+          <button
+            onClick={isPlaying ? stopMetronome : startMetronome}
+            className="playback-strip__transport-btn"
+            aria-label={isPlaying ? 'Pause metronome' : 'Play metronome'}
+            data-active={isPlaying}
+          >
+            {isPlaying ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            )}
+          </button>
+          <button
+            onClick={isScrolling ? stopAutoScroll : startAutoScroll}
+            className="playback-strip__transport-btn"
+            aria-label={isScrolling ? 'Stop auto-scroll' : 'Start auto-scroll'}
+            data-active={isScrolling}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M12 5v14M5 12l7 7 7-7"/>
+            </svg>
+          </button>
+          <div className="playback-strip__beat-dot" data-playing={isPlaying} />
+        </div>
 
-        {/* Auto Scroll Button */}
-        <button
-          onClick={isScrolling ? stopAutoScroll : startAutoScroll}
-          className={`text-sm transition-all duration-200 underline ${
-            isScrolling
-              ? 'text-green-600 hover:text-green-700 font-medium shadow-[0_0_8px_rgba(34,197,94,0.6)] text-shadow'
-              : 'text-gray-600 hover:text-gray-800'
-          }`}
-          style={isScrolling ? { textShadow: '0 0 8px rgba(34, 197, 94, 0.8)' } : {}}
-        >
-          {isScrolling ? 'Stop' : 'Auto Scroll'}
-        </button>
+        <div className="playback-strip__sep" />
 
-        {/* BPM Input */}
-        <div className="flex items-center space-x-2">
-          <label htmlFor="bpm" className="text-sm font-medium text-gray-700">
-            BPM:
-          </label>
+        {/* BPM */}
+        <div className="playback-strip__group">
+          <label htmlFor="metro-bpm" className="playback-strip__label">BPM</label>
           <input
-            id="bpm"
+            id="metro-bpm"
             type="number"
             min="40"
             max="300"
             value={bpmInput}
             onChange={handleBpmChange}
             onBlur={handleBpmBlur}
-            className="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="playback-strip__bpm-input"
           />
         </div>
 
-        {/* Volume Control */}
-        <div className="flex items-center space-x-2">
-          <label htmlFor="volume" className="text-sm font-medium text-gray-700">
-            🔊
-          </label>
+        <div className="playback-strip__sep" />
+
+        {/* Click volume */}
+        <div className="playback-strip__group">
+          <label className="playback-strip__label" title="Metronome click volume">Click</label>
           <input
-            id="volume"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={handleVolumeChange}
-            className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-            style={{
-              background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${volume * 100}%, #e5e7eb ${volume * 100}%, #e5e7eb 100%)`
-            }}
+            type="range" min="0" max="1" step="0.01"
+            value={clickVolume}
+            onChange={e => setClickVolume(parseFloat(e.target.value))}
+            className="playback-strip__slider"
+            style={{ background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${clickVolume * 100}%, var(--slider-track) ${clickVolume * 100}%, var(--slider-track) 100%)` }}
+            aria-label="Metronome click volume"
           />
-          <span className="text-xs text-gray-500 w-8">
-            {Math.round(volume * 100)}%
-          </span>
         </div>
 
-        {/* Beat Indicator */}
-        <div
-          className={`w-4 h-4 rounded-full transition-colors duration-100 ${
-            isPlaying ? 'bg-blue-400 animate-pulse' : 'bg-gray-300'
-          }`}
-        />
+        <div className="playback-strip__sep" />
 
-        {/* Keyboard Shortcut Hint */}
-        <div className="text-xs text-gray-500 hidden lg:block">
-          Space: toggle scroll
+        {/* Master volume */}
+        <div className="playback-strip__group">
+          <button
+            onClick={() => setIsMasterMuted(!isMasterMuted)}
+            className="playback-strip__mute-btn"
+            data-muted={isMasterMuted || masterVolume === 0}
+            aria-label={isMasterMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMasterMuted || masterVolume === 0 ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            )}
+          </button>
+          <input
+            type="range" min="0" max="1" step="0.01"
+            value={isMasterMuted ? 0 : masterVolume}
+            onChange={e => {
+              const v = parseFloat(e.target.value);
+              setMasterVolume(v);
+              if (v > 0) setIsMasterMuted(false);
+            }}
+            className="playback-strip__slider"
+            style={{ background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${displayMasterVol * 100}%, var(--slider-track) ${displayMasterVol * 100}%, var(--slider-track) 100%)` }}
+            aria-label="Master volume"
+          />
         </div>
+
+        {/* Shortcut hint */}
+        <span className="playback-strip__hint">Space: scroll</span>
       </div>
 
-      {/* Floating Stop Button - appears when scrolling */}
       {isScrolling && (
         <div className="fixed bottom-6 right-6 z-50">
-          <button
-            onClick={stopAutoScroll}
-            className="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-full shadow-lg text-lg transition-all duration-200 hover:scale-105"
-          >
-            ⏸️ STOP
+          <button onClick={stopAutoScroll} className="themed-btn-danger py-3 px-6 rounded-full shadow-lg text-base font-bold">
+            Stop
           </button>
         </div>
       )}

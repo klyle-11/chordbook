@@ -8,13 +8,15 @@ interface FretMarkerProps {
     guitarString: string;
     stringIndex: number;
     tuning: Tuning;
+    onFretClick?: (stringIndex: number, fret: number, note: string) => void;
 }
 
-export default function FretMarker({ fret, note, guitarString, stringIndex, tuning }: FretMarkerProps) {
+export default function FretMarker({ fret, note, guitarString, stringIndex, tuning, onFretClick }: FretMarkerProps) {
     const isOpenNote = fret === 0;
-    
+
     const handleClick = async () => {
-        await audioPlayer.playNote(note, 0.8, guitarString, fret, stringIndex, tuning); // Play for 0.8 seconds with tuning info
+        await audioPlayer.playNote(note, 0.8, guitarString, fret, stringIndex, tuning);
+        onFretClick?.(stringIndex, fret, note);
     };
     
     return (

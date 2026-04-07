@@ -18,7 +18,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Chord } from '../types/chord';
 import type { Tuning } from '../lib/tunings';
 import { isCustomChord } from '../lib/customChordLibrary';
-import { TraditionalChordDiagram } from './TraditionalChordDiagram';
+import { ChordDiagram } from './ChordDiagram';
 
 interface SortableDiagramProps {
   chord: Chord;
@@ -44,17 +44,14 @@ function SortableDiagram({ chord, index, tuning, showAllDiagrams }: SortableDiag
       ref={setNodeRef}
       style={style}
       className={`transform transition-all duration-300 ease-out cursor-grab active:cursor-grabbing ${
-        showAllDiagrams 
-          ? 'translate-y-0 opacity-100 scale-100' 
+        showAllDiagrams
+          ? 'translate-y-0 opacity-100 scale-100'
           : 'translate-y-4 opacity-0 scale-95'
       } ${isDragging ? 'shadow-lg scale-105' : ''}`}
       {...attributes}
       {...listeners}
     >
-      <TraditionalChordDiagram 
-        chordName={chord.name} 
-        tuning={tuning} 
-      />
+      <ChordDiagram chordName={chord.name} tuning={tuning} voicing={chord.voicing} />
     </div>
   );
 }
@@ -114,10 +111,10 @@ function SortableChordIcon({
         <span className="ml-1 text-blue-600 text-xs opacity-60">⋮⋮</span>
       </span>
       
-      {/* Traditional chord diagram flyout (only show on hover if not showing all diagrams) */}
+      {/* Chord diagram flyout (only show on hover if not showing all diagrams) */}
       {!isCustom && !showAllDiagrams && hoveredChord === chordKey && (
         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 animate-fade-in pointer-events-none">
-          <TraditionalChordDiagram chordName={chord.name} tuning={tuning} />
+          <ChordDiagram chordName={chord.name} tuning={tuning} voicing={chord.voicing} />
         </div>
       )}
     </div>

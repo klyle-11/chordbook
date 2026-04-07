@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { NamedProgression } from '../types/song';
+import type { ChordVoicing } from '../types/chord';
 import type { Tuning, CapoSettings } from '../lib/tunings';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -21,6 +22,7 @@ interface SortableProgressionItemProps {
   onChordReorder: (progressionId: string, oldIndex: number, newIndex: number) => void;
   onChordReplace: (progressionId: string, chordIndex: number) => void;
   onChordRemove: (progressionId: string, chordIndex: number) => void;
+  onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
   onUpdateProgressionBpm: (progressionId: string, bpm: number) => void;
   tuning: Tuning;
@@ -29,19 +31,20 @@ interface SortableProgressionItemProps {
   isNewlyCreated?: boolean;
 }
 
-function SortableProgressionItem({ 
-  progression, 
-  isExpanded, 
-  onToggle, 
-  onEdit, 
-  onDelete, 
-  onChordReorder, 
-  onChordReplace, 
+function SortableProgressionItem({
+  progression,
+  isExpanded,
+  onToggle,
+  onEdit,
+  onDelete,
+  onChordReorder,
+  onChordReplace,
   onChordRemove,
+  onUpdateChordVoicing,
   onAddChord,
   onUpdateProgressionBpm,
-  tuning, 
-  capoSettings, 
+  tuning,
+  capoSettings,
   songBpm,
   isNewlyCreated = false
 }: SortableProgressionItemProps) {
@@ -80,7 +83,7 @@ function SortableProgressionItem({
     <div 
       ref={setNodeRef} 
       style={style} 
-      className="bg-white rounded-lg shadow-sm border border-gray-200"
+      className="themed-card"
       data-progression-id={progression.id}
     >
       <div className="flex items-center p-4 gap-4">
@@ -185,42 +188,32 @@ function SortableProgressionItem({
               onReorder={(oldIndex, newIndex) => onChordReorder(progression.id, oldIndex, newIndex)}
               onReplace={(index) => onChordReplace(progression.id, index)}
               onRemove={(index) => onChordRemove(progression.id, index)}
+              onUpdateVoicing={(index, voicing) => onUpdateChordVoicing(progression.id, index, voicing)}
             />
           </div>
         </div>
       )}
     </div>
 
-    {/* Delete Confirmation Modal */}
     {showDeleteConfirm && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full shadow-xl">
+      <div className="fixed inset-0 themed-overlay flex items-center justify-center z-50 p-4">
+        <div className="themed-dialog p-6 max-w-md w-full animate-fade-in">
           <div className="mb-4">
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
-              Delete Chord Progression
+            <h3 className="text-lg font-semibold mb-2" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>
+              Delete Progression
             </h3>
-            <p className="text-sm sm:text-base text-gray-600">
-              Are you sure you want to delete the progression "<span className="break-words font-medium">{progression.name}</span>"?
+            <p style={{ color: 'var(--text-secondary)' }}>
+              Delete "<strong>{progression.name}</strong>"?
               {progression.chords.length > 0 && (
-                <span className="block mt-1 text-sm text-red-600">
-                  This will permanently delete {progression.chords.length} chord{progression.chords.length !== 1 ? 's' : ''}.
+                <span className="block mt-1 text-sm" style={{ color: 'var(--danger)' }}>
+                  {progression.chords.length} chord{progression.chords.length !== 1 ? 's' : ''} will be removed.
                 </span>
               )}
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 justify-end">
-            <button
-              onClick={handleDeleteCancel}
-              className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors order-2 sm:order-1"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleDeleteConfirm}
-              className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors order-1 sm:order-2"
-            >
-              Delete
-            </button>
+          <div className="flex gap-3 justify-end">
+            <button onClick={handleDeleteCancel} className="themed-btn-secondary">Cancel</button>
+            <button onClick={handleDeleteConfirm} className="themed-btn-danger">Delete</button>
           </div>
         </div>
       </div>
@@ -238,6 +231,7 @@ interface SongProgressionsProps {
   onChordReorder: (progressionId: string, oldIndex: number, newIndex: number) => void;
   onChordReplace: (progressionId: string, chordIndex: number) => void;
   onChordRemove: (progressionId: string, chordIndex: number) => void;
+  onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
   onAddProgression?: () => void;
   tuning: Tuning;
@@ -254,6 +248,7 @@ export default function SongProgressions({
   onChordReorder,
   onChordReplace,
   onChordRemove,
+  onUpdateChordVoicing,
   onAddChord,
   onAddProgression,
   tuning,
@@ -408,6 +403,7 @@ export default function SongProgressions({
               onChordReorder={onChordReorder}
               onChordReplace={onChordReplace}
               onChordRemove={onChordRemove}
+              onUpdateChordVoicing={onUpdateChordVoicing}
               onAddChord={onAddChord}
               onUpdateProgressionBpm={onUpdateProgressionBpm}
               tuning={tuning}

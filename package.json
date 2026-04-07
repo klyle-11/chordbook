@@ -3,20 +3,13 @@
   "private": true,
   "version": "0.0.1",
   "description": "A guitar chord progression and song management application",
-  "author": "Your Name",
   "type": "module",
-  "main": "main.cjs",
-  "homepage": "./",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "electron": "electron .",
-    "electron-dev": "concurrently \"npm run dev\" \"sh -c 'while ! curl -s http://localhost:5173 > /dev/null; do sleep 1; done && NODE_ENV=development electron .'\"",
-    "electron-pack": "npm run build && electron-builder",
-    "electron-build": "npm run build && electron-builder --publish=never",
-    "electron-dist": "npm run build && electron-builder --publish=onTagOrDraft"
+    "tauri": "tauri"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -32,14 +25,12 @@
   "devDependencies": {
     "@eslint/js": "^9.30.1",
     "@tailwindcss/postcss": "^4.1.11",
+    "@tauri-apps/cli": "^2.10.1",
     "@types/jspdf": "^2.0.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.4.21",
-    "concurrently": "^9.2.0",
-    "electron": "^34.5.8",
-    "electron-builder": "^25.1.8",
     "eslint": "^9.30.1",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
@@ -49,51 +40,5 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.35.1",
     "vite": "^7.0.4"
-  },
-  "build": {
-    "appId": "com.guitarchordmap.app",
-    "productName": "Guitar Chord Map",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "dist/**/*",
-      "main.cjs",
-      "preload.cjs",
-      "node_modules/**/*"
-    ],
-    "mac": {
-      "category": "public.app-category.music",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ]
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        }
-      ]
-    },
-    "linux": {
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    }
   }
 }
