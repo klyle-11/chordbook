@@ -4,11 +4,13 @@ import { audioPlayer } from '../lib/audioPlayer';
 interface IntegratedMetronomeProps {
   onTempoChange?: (bpm: number) => void;
   currentBpm?: number;
+  disabled?: boolean;
 }
 
-export function IntegratedMetronome({ onTempoChange, currentBpm }: IntegratedMetronomeProps) {
+export function IntegratedMetronome({ onTempoChange, currentBpm, disabled }: IntegratedMetronomeProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
+  const [showClickVol, setShowClickVol] = useState(false);
   const [bpm, setBpm] = useState(currentBpm || 120);
   const [bpmInput, setBpmInput] = useState(String(currentBpm || 120));
   const [clickVolume, setClickVolume] = useState(0.5);
@@ -20,6 +22,7 @@ export function IntegratedMetronome({ onTempoChange, currentBpm }: IntegratedMet
   const bpmValidationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentChordIndex = useRef<number>(0);
+  const isSyncingRef = useRef(false);
 
   useEffect(() => {
     const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -27,10 +30,19 @@ export function IntegratedMetronome({ onTempoChange, currentBpm }: IntegratedMet
     return () => { audioContextRef.current?.close(); };
   }, []);
 
-  useEffect(() => { onTempoChange?.(bpm); }, [bpm, onTempoChange]);
+  // Notify parent only for user-driven changes, not external syncs
+  useEffect(() => {
+    if (isSyncingRef.current) {
+      isSyncingRef.current = false;
+      return;
+    }
+    onTempoChange?.(bpm);
+  }, [bpm, onTempoChange]);
 
+  // Sync from parent (song switch)
   useEffect(() => {
     if (currentBpm !== undefined && Math.abs(currentBpm - bpm) > 0.1) {
+      isSyncingRef.current = true;
       setBpm(currentBpm);
       setBpmInput(String(currentBpm));
     }
@@ -198,31 +210,71 @@ export function IntegratedMetronome({ onTempoChange, currentBpm }: IntegratedMet
         {/* BPM */}
         <div className="playback-strip__group">
           <label htmlFor="metro-bpm" className="playback-strip__label">BPM</label>
-          <input
-            id="metro-bpm"
-            type="number"
-            min="40"
-            max="300"
-            value={bpmInput}
-            onChange={handleBpmChange}
-            onBlur={handleBpmBlur}
-            className="playback-strip__bpm-input"
-          />
+          <div className="playback-strip__bpm-stepper">
+            <button
+              className="playback-strip__bpm-step"
+              onClick={() => { const v = Math.max(40, bpm - 1); setBpm(v); setBpmInput(String(v)); }}
+              disabled={disabled || bpm <= 40}
+              aria-label="Decrease BPM"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 15l-6-6-6 6"/></svg>
+            </button>
+            <input
+              id="metro-bpm"
+              type="number"
+              min="40"
+              max="300"
+              value={bpmInput}
+              onChange={handleBpmChange}
+              onBlur={handleBpmBlur}
+              disabled={disabled}
+              className="playback-strip__bpm-input"
+            />
+            <button
+              className="playback-strip__bpm-step"
+              onClick={() => { const v = Math.min(300, bpm + 1); setBpm(v); setBpmInput(String(v)); }}
+              disabled={disabled || bpm >= 300}
+              aria-label="Increase BPM"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+          </div>
         </div>
 
         <div className="playback-strip__sep" />
 
-        {/* Click volume */}
-        <div className="playback-strip__group">
-          <label className="playback-strip__label" title="Metronome click volume">Click</label>
-          <input
-            type="range" min="0" max="1" step="0.01"
-            value={clickVolume}
-            onChange={e => setClickVolume(parseFloat(e.target.value))}
-            className="playback-strip__slider"
-            style={{ background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${clickVolume * 100}%, var(--slider-track) ${clickVolume * 100}%, var(--slider-track) 100%)` }}
-            aria-label="Metronome click volume"
-          />
+        {/* Click volume (flyout) */}
+        <div className="playback-strip__group" style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowClickVol(!showClickVol)}
+            className="playback-strip__mute-btn"
+            aria-label="Toggle click volume"
+            title="Click volume"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: clickVolume > 0 ? 1 : 0.4 }}>
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+            </svg>
+          </button>
+          <span className="playback-strip__label">Click</span>
+          {showClickVol && (
+            <>
+              <div className="playback-strip__flyout-backdrop" onClick={() => setShowClickVol(false)} />
+              <div className="playback-strip__flyout">
+                <label className="playback-strip__label">Volume</label>
+                <input
+                  type="range" min="0" max="1" step="0.01"
+                  value={clickVolume}
+                  onChange={e => setClickVolume(parseFloat(e.target.value))}
+                  className="playback-strip__slider"
+                  style={{ width: 80, background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${clickVolume * 100}%, var(--slider-track) ${clickVolume * 100}%, var(--slider-track) 100%)` }}
+                  aria-label="Metronome click volume"
+                />
+                <span className="playback-strip__label" style={{ minWidth: 28, textAlign: 'right' }}>
+                  {Math.round(clickVolume * 100)}%
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="playback-strip__sep" />

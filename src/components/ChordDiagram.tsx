@@ -201,7 +201,7 @@ function DotView({ chordName, tuning }: { chordName: string; tuning: Tuning }) {
             return (
               <div key={offset} className="flex flex-col justify-between w-6 border-r border-gray-400 h-24">
                 {positions.map((pos, si) => {
-                  const isActive = typeof pos.fret === 'number' && pos.fret !== 'x';
+                  const isActive = typeof pos.fret === 'number';
                   const note = isActive ? getNoteAtFret(strings[si], pos.fret as number) : null;
                   const isHovered = hoveredString === si;
 
@@ -251,7 +251,7 @@ export function ChordDiagram({ chordName, tuning, voicing, onRequestVoicingEdito
   // TAB view when voicing exists for this tuning
   if (voicing && voicing.tuningId === tuning.id) {
     return (
-      <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
+      <div className="rounded-lg p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
         <TabView voicing={voicing} tuning={tuning} chordName={chordName} />
       </div>
     );
@@ -261,7 +261,7 @@ export function ChordDiagram({ chordName, tuning, voicing, onRequestVoicingEdito
   const hasFingering = calculateChordFingering(chordName, tuning) !== null;
   if (hasFingering) {
     return (
-      <div className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg">
+      <div className="rounded-lg p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
         <DotView chordName={chordName} tuning={tuning} />
       </div>
     );
@@ -270,12 +270,17 @@ export function ChordDiagram({ chordName, tuning, voicing, onRequestVoicingEdito
   // No diagram — offer to open voicing editor
   return (
     <div
-      className="bg-white border border-gray-300 rounded-lg p-3 shadow-lg flex flex-col items-center justify-center min-h-[100px] cursor-pointer hover:border-blue-400 transition-colors group"
+      className="rounded-lg p-3 flex flex-col items-center justify-center min-h-[100px] transition-colors group"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        cursor: onRequestVoicingEditor ? 'pointer' : 'default',
+      }}
       onClick={onRequestVoicingEditor}
       title="Click to create a voicing"
     >
-      <div className="text-center font-semibold text-sm mb-1">{chordName}</div>
-      <div className="text-xs text-gray-400 group-hover:text-blue-500 transition-colors">
+      <div className="text-center font-semibold text-sm mb-1" style={{ color: 'var(--text)' }}>{chordName}</div>
+      <div className="text-xs transition-colors" style={{ color: 'var(--text-muted)' }}>
         {onRequestVoicingEditor ? 'Click to add voicing' : 'No diagram available'}
       </div>
     </div>

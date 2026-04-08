@@ -14,6 +14,7 @@ import {
   updateProgressionBpm
 } from './lib/songStorage';
 import { loadTheme, saveTheme, applyTheme, type Theme, themes } from './lib/theme';
+import { findVoicingsForNotes } from './lib/savedVoicingLibrary';
 
 import BackupManager from './components/BackupManager';
 import SongScale from './components/SongScale';
@@ -318,10 +319,18 @@ function App() {
     });
   }
 
-  function handleAddChord(progressionId: string, chordName: string) {
+  async function handleAddChord(progressionId: string, chordName: string) {
     if (!currentSongId) return;
     const notes = getNotesForChord(chordName);
-    const newChord = { name: chordName, notes };
+    // Check for saved voicings matching these notes + current tuning (use most recent)
+    const saved = await findVoicingsForNotes(notes, currentTuning.id);
+    const latest = saved.length > 0
+      ? saved.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]
+      : null;
+    const voicing: ChordVoicing | undefined = latest
+      ? { frets: latest.frets, tuningId: latest.tuningId }
+      : undefined;
+    const newChord = { name: chordName, notes, voicing };
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
         if (song.id === currentSongId) {
@@ -367,7 +376,14 @@ function App() {
         <div className="sticky-header__toolbar">
           <div className="app-container py-2">
             <div className="toolbar-row">
-              <IntegratedMetronome onTempoChange={setCurrentBpm} currentBpm={currentBpm} />
+              <IntegratedMetronome
+                onTempoChange={(bpm) => {
+                  setCurrentBpm(bpm);
+                  if (currentSongId) handleSongBpmChange(currentSongId, bpm);
+                }}
+                currentBpm={currentBpm}
+                disabled={!currentSongId}
+              />
               <TuningSelector
                 currentTuning={currentTuning}
                 onTuningChange={handleTuningChange}
@@ -388,7 +404,7 @@ function App() {
                 onSelectSong={handleSelectSong}
                 onCreateSong={handleCreateSong}
                 onRenameSong={handleRenameSong}
-                onUpdateSongBpm={handleSongBpmChange}
+
                 onDeleteSong={handleDeleteSong}
                 onBackToOverview={handleBackToOverview}
               />
@@ -408,7 +424,7 @@ function App() {
               onSelectSong={handleSelectSong}
               onCreateSong={handleCreateSong}
               onRenameSong={handleRenameSong}
-              onUpdateSongBpm={handleSongBpmChange}
+
               onDeleteSong={handleDeleteSong}
               onBackToOverview={handleBackToOverview}
             />

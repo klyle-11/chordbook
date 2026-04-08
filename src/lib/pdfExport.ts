@@ -4,6 +4,41 @@ import type { Song } from '../types/song';
 import { formatSongInfo } from './displayUtils';
 import { describeSongScale, getUniqueNotesFromSong } from './songAnalysis';
 
+/** Save a jsPDF document using the native Save-As dialog when available, otherwise fall back to auto-download. */
+async function savePdfWithPicker(pdf: jsPDF, defaultName: string): Promise<void> {
+  const blob = pdf.output('blob');
+
+  // Use File System Access API if available (Chromium)
+  if ('showSaveFilePicker' in window) {
+    try {
+      const handle = await (window as unknown as { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker({
+        suggestedName: defaultName,
+        types: [{
+          description: 'PDF Document',
+          accept: { 'application/pdf': ['.pdf'] },
+        }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (err: unknown) {
+      // User cancelled the picker — don't fall through to auto-download
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+    }
+  }
+
+  // Fallback: trigger a download via object URL
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = defaultName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export interface PDFExportOptions {
   includeScale: boolean;
   includeFretboardDiagrams: boolean;
@@ -18,10 +53,14 @@ export const DEFAULT_PDF_OPTIONS: PDFExportOptions = {
   orientation: 'portrait'
 };
 
+export type ProgressCallback = (message: string) => void;
+
 export async function exportSongToPDF(
-  song: Song, 
-  options: PDFExportOptions = DEFAULT_PDF_OPTIONS
+  song: Song,
+  options: PDFExportOptions = DEFAULT_PDF_OPTIONS,
+  onProgress?: ProgressCallback,
 ): Promise<void> {
+  onProgress?.('Creating PDF document');
   // Create PDF document
   const pdf = new jsPDF({
     orientation: options.orientation,
@@ -55,6 +94,8 @@ export async function exportSongToPDF(
   const dateStr = song.updatedAt.toLocaleDateString();
   pdf.text(`Last Updated: ${dateStr}`, margin, yPosition);
   yPosition += 20;
+
+  onProgress?.('Adding song header');
 
   // Add scale information if requested
   if (options.includeScale) {
@@ -90,6 +131,8 @@ export async function exportSongToPDF(
   pdf.text(`Unique Notes: ${uniqueNotes}`, margin, yPosition);
   yPosition += 12;
   }
+
+  onProgress?.('Writing progressions');
 
   // Add progressions
   if (song.progressions.length > 0) {
@@ -173,18 +216,23 @@ export async function exportSongToPDF(
     pdf.text(footerText, pageWidth - textWidth - margin, pageHeight - 10);
   }
 
-  // Download the PDF
+  onProgress?.('Saving PDF');
+
+  // Save the PDF (native dialog or fallback download)
   const fileName = `${song.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_chordbook.pdf`;
-  pdf.save(fileName);
+  await savePdfWithPicker(pdf, fileName);
+  onProgress?.('Done');
 }
 
 // Alternative method using HTML elements for better diagram rendering
 export async function exportSongToPDFWithDiagrams(
   song: Song,
   containerElement: HTMLElement,
-  options: PDFExportOptions = DEFAULT_PDF_OPTIONS
+  options: PDFExportOptions = DEFAULT_PDF_OPTIONS,
+  onProgress?: ProgressCallback,
 ): Promise<void> {
   try {
+    onProgress?.('Rendering diagrams to canvas');
     // Create canvas from HTML element
     const canvas = await html2canvas(containerElement, {
       scale: 2,
@@ -321,6 +369,8 @@ export async function exportSongToPDFWithDiagrams(
       }
     });
 
+    onProgress?.('Building PDF pages');
+
     // Create PDF
     const pdf = new jsPDF({
       orientation: options.orientation,
@@ -344,9 +394,12 @@ export async function exportSongToPDFWithDiagrams(
       }
     }
 
-    // Download the PDF
+    onProgress?.('Saving PDF');
+
+    // Save the PDF (native dialog or fallback download)
     const fileName = `${song.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_chordbook_diagrams.pdf`;
-    pdf.save(fileName);
+    await savePdfWithPicker(pdf, fileName);
+    onProgress?.('Done');
   } catch (error) {
     console.error('Error generating PDF with diagrams:', error);
     throw new Error('Failed to generate PDF with diagrams');

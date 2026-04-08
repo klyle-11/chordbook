@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { Song } from '../types/song';
 import { EditableText } from './EditableText';
 import { DEFAULT_TUNING } from '../lib/tunings';
-import { BpmInput } from './BpmInput';
 import PDFExportDialog from './PDFExportDialog';
 
 interface SongManagerProps {
@@ -11,7 +10,6 @@ interface SongManagerProps {
   onSelectSong: (song: Song) => void;
   onCreateSong: (name: string) => void;
   onRenameSong: (songId: string, newName: string) => void;
-  onUpdateSongBpm?: (songId: string, bpm: number) => void;
   onDeleteSong: (songId: string) => void;
   onBackToOverview: () => void;
 }
@@ -22,7 +20,6 @@ export default function SongManager({
   onSelectSong,
   onCreateSong,
   onRenameSong,
-  onUpdateSongBpm,
   onDeleteSong,
   onBackToOverview
 }: SongManagerProps) {
@@ -64,33 +61,33 @@ export default function SongManager({
       className="themed-card themed-card-interactive p-5 cursor-pointer"
     >
       <div className="flex items-start justify-between mb-3">
-        <h3 className="text-base font-semibold truncate flex-1 pr-2" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>
+        <h3 className="text-base font-semibold truncate flex-1 pr-2" style={{ fontFamily: 'var(--font-body)', color: 'var(--card-text)' }}>
           {song.name}
         </h3>
         <button
           onClick={(e) => { e.stopPropagation(); setSongToDelete(song.id); }}
           className="p-1 transition-colors flex-shrink-0"
-          style={{ color: 'var(--text-muted)' }}
+          style={{ color: 'var(--card-text-muted)' }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
-        >
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--card-text-muted)')}
+>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
         </button>
       </div>
 
-      <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
+      <p className="text-sm mb-2" style={{ color: 'var(--card-text-secondary)' }}>
         {song.progressions.length} progression{song.progressions.length !== 1 ? 's' : ''}
       </p>
       {song.lastOpened && (
-        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-xs mb-3" style={{ color: 'var(--card-text-muted)' }}>
           Last opened {song.lastOpened.toLocaleDateString()}
         </p>
       )}
 
       {showBpmTuning && (
-        <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-xs mb-3" style={{ color: 'var(--card-text-muted)' }}>
           {song.bpm || 120} BPM &middot; {song.tuning?.name || DEFAULT_TUNING.name}
         </p>
       )}
@@ -137,12 +134,10 @@ export default function SongManager({
             <span className="song-header__meta-item">
               {currentSong.progressions.length} prog{currentSong.progressions.length !== 1 ? 's' : ''}
             </span>
-            {onUpdateSongBpm && (
-              <>
-                <span className="song-header__meta-sep" />
-                <BpmInput bpm={currentSong.bpm} onChange={(bpm) => onUpdateSongBpm(currentSong.id, bpm)} size="sm" />
-              </>
-            )}
+            <span className="song-header__meta-sep" />
+            <span className="song-header__meta-item">
+              {currentSong.bpm || 120} BPM
+            </span>
           </div>
 
           {/* Right: actions */}

@@ -1,10 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Song } from '../types/song';
 import type { PDFExportOptions } from '../lib/pdfExport';
 import { exportSongToPDF, exportSongToPDFWithDiagrams, DEFAULT_PDF_OPTIONS } from '../lib/pdfExport';
 import { formatSongInfo } from '../lib/displayUtils';
 import { getUniqueNotesFromSong, describeSongScale } from '../lib/songAnalysis';
-// Traditional diagrams intentionally excluded from PDF export
 import FretboardDiagram from './FretboardDiagram';
 
 interface PDFExportDialogProps {
@@ -18,134 +17,145 @@ interface PrintableContentProps {
   options: PDFExportOptions;
 }
 
-// Printable content component
 function PrintableContent({ song, options }: PrintableContentProps) {
   return (
-    <div className="bg-white p-8 min-h-screen pdf-export-content" style={{ fontFamily: 'Arial, sans-serif' }}>
+    <div className="pdf-export-content" style={{ fontFamily: 'Arial, sans-serif', padding: 32, background: '#fff', color: '#1a1a1a' }}>
       {/* Header */}
-      <div className="mb-8 page-break-inside-avoid">
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">{song.name}</h1>
-        <div className="text-sm text-gray-600 space-y-1 bg-gray-50 p-4 rounded-lg">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <p><strong>Song Info:</strong> {formatSongInfo(song.tuning, song.capoSettings, song.bpm)}</p>
-            <p><strong>Last Updated:</strong> {song.updatedAt.toLocaleDateString()}</p>
-            <p><strong>Total Progressions:</strong> {song.progressions.length}</p>
-            <p><strong>Total Chords:</strong> {song.progressions.reduce((sum, p) => sum + p.chords.length, 0)}</p>
-          </div>
+      <div style={{ marginBottom: 28, borderBottom: '2px solid #e5e5e5', paddingBottom: 20 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 700, margin: '0 0 12px', color: '#1a1a1a' }}>{song.name}</h1>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12, color: '#666' }}>
+          <span>{formatSongInfo(song.tuning, song.capoSettings, song.bpm)}</span>
+          <span>Updated {song.updatedAt.toLocaleDateString()}</span>
+          <span>{song.progressions.length} progression{song.progressions.length !== 1 ? 's' : ''}</span>
+          <span>{song.progressions.reduce((sum, p) => sum + p.chords.length, 0)} total chords</span>
         </div>
       </div>
 
       {/* Scale Information */}
       {options.includeScale && (
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Scale Information</h2>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
-              <div>
-                <p><strong>Tuning:</strong> {song.tuning.strings.map(s => `${s.note}${s.octave}`).join(' - ')}</p>
-                <p><strong>Tuning Name:</strong> {song.tuning.name}</p>
-              </div>
-              <div>
-                {song.capoSettings.enabled && song.capoSettings.fret > 0 && (
-                  <p><strong>Capo:</strong> Fret {song.capoSettings.fret}</p>
-                )}
-                <p><strong>Base Tempo:</strong> {song.bpm} BPM</p>
-              </div>
-            </div>
-            {/* Song scale details */}
-            <div className="mt-3 text-sm text-gray-700">
-              <p><strong>Scale:</strong> {describeSongScale(song)}</p>
-              <p className="mt-1"><strong>Unique Notes:</strong> {getUniqueNotesFromSong(song).join(', ')}</p>
-            </div>
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 10px', color: '#333' }}>Scale Information</h2>
+          <div style={{ fontSize: 12, color: '#555', lineHeight: 1.8 }}>
+            <div>Tuning: {song.tuning.strings.map(s => `${s.note}${s.octave}`).join(' - ')} ({song.tuning.name})</div>
+            {song.capoSettings.enabled && song.capoSettings.fret > 0 && (
+              <div>Capo: Fret {song.capoSettings.fret}</div>
+            )}
+            <div>Tempo: {song.bpm} BPM</div>
+            <div>Scale: {describeSongScale(song)}</div>
+            <div>Notes: {getUniqueNotesFromSong(song).join(', ')}</div>
           </div>
         </div>
       )}
 
       {/* Progressions */}
-      {song.progressions.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Chord Progressions</h2>
-          
-          {song.progressions.map((progression, index) => (
-            <div key={progression.id} className="mb-12 page-break-inside-avoid">
-              {/* Progression Header */}
-              <div className="mb-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-2">
-                  {index + 1}. {progression.name}
-                </h3>
-                <div className="text-sm text-gray-600 mb-4">
-                  <p><strong>Chords:</strong> {progression.chords.map(c => c.name).join(' → ')}</p>
-                  <p><strong>BPM:</strong> {progression.bpm || song.bpm}{progression.bpm ? ' (custom)' : ''}</p>
-                  <p><strong>Chord Count:</strong> {progression.chords.length}</p>
-                </div>
-              </div>
+      {song.progressions.map((progression, index) => (
+        <div key={progression.id} style={{ marginBottom: 32, pageBreakInside: 'avoid' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px', color: '#1a1a1a' }}>
+            {index + 1}. {progression.name}
+          </h3>
+          <div style={{ fontSize: 12, color: '#666', marginBottom: 12, lineHeight: 1.7 }}>
+            <div>{progression.chords.map(c => c.name).join(' \u2192 ')}</div>
+            <div>{progression.bpm || song.bpm} BPM{progression.bpm ? ' (custom)' : ''} &middot; {progression.chords.length} chord{progression.chords.length !== 1 ? 's' : ''}</div>
+          </div>
 
-              {/* Traditional chord diagrams intentionally excluded from PDF export */}
-
-              {/* Fretboard Diagrams */}
-              {options.includeFretboardDiagrams && progression.chords.length > 0 && (
-                <div className="mb-8">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Fretboard Diagrams</h4>
-                  <div className="space-y-6">
-                    {progression.chords.map((chord, chordIndex) => (
-                      <div key={`fret-${chord.name}-${chordIndex}`} className="page-break-inside-avoid">
-                        <h5 className="text-md font-semibold text-gray-700 mb-3">
-                          {chordIndex + 1}. {chord.name}
-                        </h5>
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                          <FretboardDiagram
-                            chordNotes={chord.notes} 
-                            tuning={song.tuning}
-                            capoSettings={song.capoSettings}
-                          />
-                        </div>
-                        <div className="mt-2 text-sm text-gray-600">
-                          <p><strong>Chord Notes:</strong> {chord.notes.join(', ')}</p>
-                        </div>
-                      </div>
-                    ))}
+          {/* Fretboard Diagrams — 2-wide grid */}
+          {options.includeFretboardDiagrams && progression.chords.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {progression.chords.map((chord, ci) => (
+                <div key={`fret-${chord.name}-${ci}`} style={{ pageBreakInside: 'avoid' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 4 }}>
+                    {chord.name}
+                    <span style={{ fontWeight: 400, color: '#888', marginLeft: 6, fontSize: 11 }}>
+                      {chord.notes.join(', ')}
+                    </span>
+                  </div>
+                  <div style={{ background: '#f8f8f8', padding: 8, borderRadius: 6, border: '1px solid #e5e5e5' }}>
+                    <FretboardDiagram
+                      chordNotes={chord.notes}
+                      tuning={song.tuning}
+                      capoSettings={song.capoSettings}
+                    />
                   </div>
                 </div>
-              )}
-
-              {/* Add page break after each progression except the last */}
-              {index < song.progressions.length - 1 && (
-                <div className="page-break-after"></div>
-              )}
+              ))}
             </div>
-          ))}
+          )}
+
+          {/* Page break between progressions */}
+          {index < song.progressions.length - 1 && (
+            <div style={{ pageBreakAfter: 'always' }} />
+          )}
         </div>
-      )}
+      ))}
 
       {/* Footer */}
-      <div className="mt-12 pt-8 border-t border-gray-200 text-center text-sm text-gray-500">
-        <p>Generated by Chordbook on {new Date().toLocaleDateString()}</p>
+      <div style={{ marginTop: 40, paddingTop: 16, borderTop: '1px solid #e5e5e5', textAlign: 'center', fontSize: 11, color: '#aaa' }}>
+        Generated by Chordbook on {new Date().toLocaleDateString()}
       </div>
     </div>
   );
 }
 
+interface LogEntry {
+  message: string;
+  timestamp: number;
+}
+
+const STALL_TIMEOUT_MS = 15_000;
+
 export default function PDFExportDialog({ song, isOpen, onClose }: PDFExportDialogProps) {
-  console.log('PDFExportDialog rendered with isOpen:', isOpen);
   const [options, setOptions] = useState<PDFExportOptions>(DEFAULT_PDF_OPTIONS);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMethod, setExportMethod] = useState<'text' | 'visual'>('visual');
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [, setStalled] = useState(false);
+  const [, setExportError] = useState<string | null>(null);
   const printableRef = useRef<HTMLDivElement>(null);
+  const logEndRef = useRef<HTMLDivElement>(null);
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetStallTimer = useCallback(() => {
+    if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+    setStalled(false);
+    stallTimerRef.current = setTimeout(() => setStalled(true), STALL_TIMEOUT_MS);
+  }, []);
+
+  // Clean up stall timer on unmount
+  useEffect(() => {
+    return () => { if (stallTimerRef.current) clearTimeout(stallTimerRef.current); };
+  }, []);
+
+  // Auto-scroll log area
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
+
+  const addLog = useCallback((message: string) => {
+    setLogs(prev => [...prev, { message, timestamp: Date.now() }]);
+    resetStallTimer();
+  }, [resetStallTimer]);
 
   const handleExport = async () => {
     if (isExporting) return;
-    
     setIsExporting(true);
+    setLogs([]);
+    setStalled(false);
+    setExportError(null);
+    resetStallTimer();
     try {
       if (exportMethod === 'text') {
-        await exportSongToPDF(song, options);
+        await exportSongToPDF(song, options, addLog);
       } else if (printableRef.current) {
-        await exportSongToPDFWithDiagrams(song, printableRef.current, options);
+        await exportSongToPDFWithDiagrams(song, printableRef.current, options, addLog);
       }
     } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      addLog(`Error: ${msg}`);
+      setExportError(msg);
       console.error('Export failed:', error);
-      alert('Export failed. Please try again.');
     } finally {
+      if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+      setStalled(false);
       setIsExporting(false);
     }
   };
@@ -153,153 +163,152 @@ export default function PDFExportDialog({ song, isOpen, onClose }: PDFExportDial
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center themed-overlay p-4">
+      <div className="themed-dialog max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-800">Export PDF: {song.name}</h2>
+        <div className="flex items-center justify-between p-5" style={{ borderBottom: '1px solid var(--border)' }}>
+          <div>
+            <h2 className="text-lg font-semibold" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>
+              Export PDF
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{song.name}</p>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+            className="w-7 h-7 flex items-center justify-center rounded-md transition-colors"
+            style={{ color: 'var(--text-muted)', background: 'var(--bg-secondary)' }}
           >
-            ×
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
         {/* Options */}
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Export Options</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Export Method */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Export Method
+        <div className="p-5 space-y-5" style={{ borderBottom: '1px solid var(--border)' }}>
+
+          {/* Method */}
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Method</span>
+            <div className="flex gap-2 mt-2">
+              {(['visual', 'text'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => setExportMethod(m)}
+                  className="px-3 py-1.5 text-xs rounded-md transition-colors"
+                  style={{
+                    background: exportMethod === m ? 'var(--accent)' : 'var(--bg-secondary)',
+                    color: exportMethod === m ? '#fff' : 'var(--text-secondary)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  {m === 'visual' ? 'Visual (with diagrams)' : 'Text-only'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Content toggles + format in a row */}
+          <div className="flex flex-wrap gap-6">
+            <div className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Include</span>
+              <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
+                <input
+                  type="checkbox"
+                  checked={options.includeScale}
+                  onChange={e => setOptions({ ...options, includeScale: e.target.checked })}
+                  style={{ accentColor: 'var(--accent)' }}
+                />
+                Scale info
               </label>
-              <div className="space-y-2">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="exportMethod"
-                    value="visual"
-                    checked={exportMethod === 'visual'}
-                    onChange={(e) => setExportMethod(e.target.value as 'text' | 'visual')}
-                    className="mr-2"
-                  />
-                  Visual (with diagrams) - Better quality
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="exportMethod"
-                    value="text"
-                    checked={exportMethod === 'text'}
-                    onChange={(e) => setExportMethod(e.target.value as 'text' | 'visual')}
-                    className="mr-2"
-                  />
-                  Text-based - Smaller file size
-                </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
+                <input
+                  type="checkbox"
+                  checked={options.includeFretboardDiagrams}
+                  onChange={e => setOptions({ ...options, includeFretboardDiagrams: e.target.checked })}
+                  style={{ accentColor: 'var(--accent)' }}
+                />
+                Fretboard diagrams
+              </label>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Format</span>
+              <div className="flex gap-2">
+                <select
+                  value={options.paperSize}
+                  onChange={e => setOptions({ ...options, paperSize: e.target.value as 'a4' | 'letter' })}
+                  className="instrument-strip__select"
+                >
+                  <option value="a4">A4</option>
+                  <option value="letter">Letter</option>
+                </select>
+                <select
+                  value={options.orientation}
+                  onChange={e => setOptions({ ...options, orientation: e.target.value as 'portrait' | 'landscape' })}
+                  className="instrument-strip__select"
+                >
+                  <option value="portrait">Portrait</option>
+                  <option value="landscape">Landscape</option>
+                </select>
               </div>
-            </div>
-
-            {/* Content Options */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Content to Include
-              </label>
-              <div className="space-y-2">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={options.includeScale}
-                    onChange={(e) => setOptions({...options, includeScale: e.target.checked})}
-                    className="mr-2"
-                  />
-                  Scale information
-                </label>
-                {/* Traditional diagrams intentionally omitted */}
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={options.includeFretboardDiagrams}
-                    onChange={(e) => setOptions({...options, includeFretboardDiagrams: e.target.checked})}
-                    className="mr-2"
-                  />
-                  Fretboard diagrams
-                </label>
-              </div>
-            </div>
-
-            {/* Format Options */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Paper Size
-              </label>
-              <select
-                value={options.paperSize}
-                onChange={(e) => setOptions({...options, paperSize: e.target.value as 'a4' | 'letter'})}
-                className="w-full p-2 border border-gray-300 rounded-md"
-              >
-                <option value="a4">A4</option>
-                <option value="letter">Letter</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Orientation
-              </label>
-              <select
-                value={options.orientation}
-                onChange={(e) => setOptions({...options, orientation: e.target.value as 'portrait' | 'landscape'})}
-                className="w-full p-2 border border-gray-300 rounded-md"
-              >
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
             </div>
           </div>
         </div>
 
-        {/* Preview */}
-        {exportMethod === 'visual' && (
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Preview</h3>
-            <div 
-              className="border border-gray-300 rounded-lg overflow-hidden bg-white max-h-96 overflow-y-auto"
-              style={{ transform: 'scale(0.5)', transformOrigin: 'top left', width: '200%', height: '200%' }}
-            >
-              <PrintableContent song={song} options={options} />
-            </div>
-          </div>
-        )}
-
         {/* Actions */}
-        <div className="p-6 flex justify-end space-x-4">
+        <div className="flex items-center justify-end gap-3 p-5">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
             disabled={isExporting}
+            className="themed-btn-secondary"
           >
             Cancel
           </button>
           <button
             onClick={handleExport}
             disabled={isExporting}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="themed-btn-primary"
+            style={isExporting ? { opacity: 0.5, pointerEvents: 'none' } : {}}
           >
             {isExporting ? 'Exporting...' : 'Export PDF'}
           </button>
         </div>
       </div>
 
-      {/* Hidden printable content for visual export */}
+      {/* Hidden printable content for visual export — force light colors regardless of theme */}
       {exportMethod === 'visual' && (
-        <div 
+        <div
           ref={printableRef}
-          className="fixed -top-[10000px] left-0 bg-white" 
+          className="fixed -top-[10000px] left-0"
           id="pdf-export-root"
-          style={{ width: '210mm' }}
+          style={{
+            width: '210mm',
+            background: '#fff',
+            // Override all theme variables to print-safe light values
+            '--bg': '#ffffff',
+            '--bg-secondary': '#f5f5f4',
+            '--bg-card': '#ffffff',
+            '--bg-card-hover': '#fafafa',
+            '--text': '#1a1a1a',
+            '--text-secondary': '#555555',
+            '--text-muted': '#999999',
+            '--card-text': '#1a1a1a',
+            '--card-text-secondary': '#555555',
+            '--card-text-muted': '#999999',
+            '--border': '#e5e5e5',
+            '--border-hover': '#cccccc',
+            '--accent': '#2563eb',
+            '--accent-hover': '#1d4ed8',
+            '--accent-subtle': '#eff6ff',
+            '--danger': '#dc2626',
+            '--input-bg': '#ffffff',
+            '--input-border': '#d4d4d4',
+            '--slider-track': '#e5e5e5',
+            '--tag-bg': '#f0f0f0',
+            '--tag-text': '#555555',
+          } as React.CSSProperties}
         >
           <PrintableContent song={song} options={options} />
         </div>

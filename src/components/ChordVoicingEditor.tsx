@@ -11,6 +11,7 @@ interface ChordVoicingEditorProps {
   tuning: Tuning;
   initialFrets?: (number | null)[];
   chordName?: string;
+  chordNotes?: string[];
   onApply: (frets: (number | null)[]) => void;
   onCancel: () => void;
 }
@@ -41,6 +42,7 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
   tuning,
   initialFrets,
   chordName,
+  chordNotes,
   onApply,
   onCancel,
 }, ref) => {
@@ -77,6 +79,25 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
   }, [tuning.id, stringCount, initialFrets]);
 
   const derivedNotes = getNotesFromVoicing(tuning, frets);
+
+  // Compute suggested fret per string from chord notes (used as placeholder + Tab fill)
+  const suggestions = tuning.displayStrings.map((stringName, _i) => {
+    if (!chordNotes || chordNotes.length === 0) return null;
+    // Find the chord note that has the lowest fret on this string
+    let bestFret: number | null = null;
+    let bestNote: string | null = null;
+    for (const note of chordNotes) {
+      // Normalize flats
+      const normalized = FLAT_TO_SHARP[note] || (CHROMATIC.includes(note) ? note : null);
+      if (!normalized) continue;
+      const possibleFrets = getFretsForNoteOnString(stringName, normalized).filter(f => f <= 12);
+      if (possibleFrets.length > 0 && (bestFret === null || possibleFrets[0] < bestFret)) {
+        bestFret = possibleFrets[0];
+        bestNote = normalized;
+      }
+    }
+    return bestFret !== null ? { fret: bestFret, note: bestNote! } : null;
+  });
 
   function handleFretChange(index: number, value: string) {
     const newFrets = [...frets];
@@ -119,6 +140,21 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
       inputRefs.current[index - 1]?.focus();
       inputRefs.current[index - 1]?.select();
     }
+    // Tab: fill from suggestion if input is empty
+    if (e.key === 'Tab' && frets[index] === null && suggestions[index]) {
+      e.preventDefault();
+      const newFrets = [...frets];
+      newFrets[index] = suggestions[index]!.fret;
+      setFrets(newFrets);
+      setLastFilledString(index);
+      setTimeout(() => setLastFilledString(null), 600);
+      // Move to next input
+      const next = e.shiftKey ? index - 1 : index + 1;
+      if (next >= 0 && next < stringCount) {
+        inputRefs.current[next]?.focus();
+        inputRefs.current[next]?.select();
+      }
+    }
     // Enter to apply
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -126,6 +162,12 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
         onApply(frets);
       }
     }
+  }
+
+  // Fill all suggestions at once
+  function fillAllSuggestions() {
+    const newFrets = frets.map((f, i) => f !== null ? f : (suggestions[i]?.fret ?? null));
+    setFrets(newFrets);
   }
 
   function toggleMute(index: number) {
@@ -146,7 +188,8 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
     setSaveStatus(`Saved "${saveName.trim()}" to library`);
     setShowSaveForm(false);
     setSaveName('');
-    setTimeout(() => setSaveStatus(null), 2000);
+    // Also apply the voicing immediately
+    onApply(frets);
   }
 
   const hasAnyFret = frets.some(f => f !== null);
@@ -202,7 +245,7 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
                 onChange={e => handleFretChange(i, e.target.value)}
                 onKeyDown={e => handleInputKeyDown(i, e)}
                 onFocus={e => e.target.select()}
-                placeholder="X"
+                placeholder={suggestions[i] ? suggestions[i]!.note : 'X'}
                 className="w-14 text-center text-sm py-1 rounded font-mono"
                 style={{
                   background: lastFilledString === i ? 'var(--accent-subtle)' : 'var(--bg-card)',
@@ -244,7 +287,20 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
       )}
 
       {/* Action buttons */}
-      <div className="flex gap-2 mt-4">
+      <div className="flex gap-2 mt-4 flex-wrap">
+        {suggestions.some(s => s !== null) && frets.some((f, i) => f === null && suggestions[i]) && (
+          <button
+            onClick={fillAllSuggestions}
+            className="px-3 py-1.5 text-sm rounded transition-colors"
+            style={{
+              background: 'var(--bg-card)',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            Fill Suggested
+          </button>
+        )}
         <button
           onClick={() => onApply(frets)}
           disabled={!hasAnyFret}
