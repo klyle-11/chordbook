@@ -32,6 +32,7 @@ export interface Song {
   bpm: number;
   timeSignature?: TimeSignature;
   pairings?: ChordPairing[];
+  leadIds?: string[];
   createdAt: Date;
   updatedAt: Date;
   lastOpened?: Date; // Track when song was last opened
@@ -46,6 +47,7 @@ export interface SavedSong extends Omit<Song, 'createdAt' | 'updatedAt' | 'lastO
     createdAt: string;
     updatedAt: string;
   }>;
+  leadIds?: string[];
   tuning: Tuning;
   capoSettings: CapoSettings;
   createdAt: string;

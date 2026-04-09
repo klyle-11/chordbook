@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react'
-import { getNotesForChord } from './lib/chordUtils';
+import { useState, useEffect, useMemo } from 'react'
+import { getNotesForChord, findChordByNotes } from './lib/chordUtils';
+import { getNotesFromVoicing } from './lib/fretUtils';
 import type { Song, TimeSignature, ChordPairing } from './types/song';
 import type { ChordVoicing } from './types/chord';
+import type { Lead } from './types/lead';
+import type { LeadNote } from './types/lead';
 import { DEFAULT_TUNING, type Tuning, type CapoSettings } from './lib/tunings';
 import {
   saveSongs,
@@ -16,6 +19,8 @@ import {
 } from './lib/songStorage';
 import { loadTheme, saveTheme, applyTheme, type Theme, themes } from './lib/theme';
 import { findVoicingsForNotes } from './lib/savedVoicingLibrary';
+import { getAllLeads, saveLead as saveLeadToDb, deleteLead as deleteLeadFromDb, updateLead as updateLeadInDb } from './lib/leadStorage';
+import { db } from './lib/db';
 
 import BackupManager from './components/BackupManager';
 import SongScale from './components/SongScale';
@@ -34,6 +39,8 @@ function App() {
   const [currentBpm, setCurrentBpm] = useState<number>(120);
   const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0]);
   const [currentTimeSignature, setCurrentTimeSignature] = useState<TimeSignature>({ beatsPerMeasure: 4, beatUnit: 4 });
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [activeLeadId, setActiveLeadId] = useState<string | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -44,6 +51,15 @@ function App() {
       await migrateLocalStorageToDB();
       const loadedSongs = await loadSongsAsync();
       setSongs(loadedSongs);
+
+      const loadedLeads = await getAllLeads();
+      setLeads(loadedLeads);
+
+      // Restore active lead
+      try {
+        const activeLeadEntry = await db.appState.get('activeLeadId');
+        if (activeLeadEntry) setActiveLeadId(activeLeadEntry.value || null);
+      } catch {}
 
       const currentId = await loadCurrentSongAsync();
       if (currentId) {
@@ -331,10 +347,46 @@ function App() {
         if (song.id === currentSongId) {
           const updatedProgressions = song.progressions.map(p => {
             if (p.id === progressionId) {
-              const updatedChords = p.chords.map((c, i) =>
-                i === chordIndex ? { ...c, voicing } : c
-              );
+              const updatedChords = p.chords.map((c, i) => {
+                if (i !== chordIndex) return c;
+                const updated = { ...c, voicing };
+                // When applying a voicing to a chord with no notes (new voicing),
+                // derive notes and chord name from the fret positions
+                if (c.notes.length === 0 && voicing) {
+                  const derivedNotes = getNotesFromVoicing(currentTuning, voicing.frets);
+                  const uniqueNotes = [...new Set(derivedNotes)];
+                  updated.notes = uniqueNotes;
+                  const detectedName = findChordByNotes(uniqueNotes);
+                  if (detectedName) {
+                    updated.name = detectedName;
+                  } else if (uniqueNotes.length > 0) {
+                    updated.name = `[${uniqueNotes.join(', ')}]`;
+                  }
+                }
+                return updated;
+              });
               return { ...p, chords: updatedChords, updatedAt: new Date() };
+            }
+            return p;
+          });
+          return { ...song, progressions: updatedProgressions, updatedAt: new Date() };
+        }
+        return song;
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
+  function handleAddNewVoicing(progressionId: string) {
+    if (!currentSongId) return;
+    const newChord = { name: 'New Voicing', notes: [] as string[], voicing: undefined };
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === currentSongId) {
+          const updatedProgressions = song.progressions.map(p => {
+            if (p.id === progressionId) {
+              return { ...p, chords: [...p.chords, newChord], updatedAt: new Date() };
             }
             return p;
           });
@@ -487,6 +539,85 @@ function App() {
     });
   }
 
+  // ─── Lead CRUD ───
+
+  const activeLead = activeLeadId ? leads.find(l => l.id === activeLeadId) ?? null : null;
+  const activeLeadNotes = useMemo(
+    () => activeLead ? [...new Set(activeLead.notes.map(n => n.note))] : [],
+    [activeLead]
+  );
+
+  function handleActivateLead(leadId: string | null) {
+    setActiveLeadId(leadId);
+    db.appState.put({ key: 'activeLeadId', value: leadId || '' });
+  }
+
+  async function handleCreateLead(name: string, notes: LeadNote[], tuningId: string) {
+    const id = await saveLeadToDb({ name, notes, tuningId });
+    const newLead: Lead = { id, name, notes, tuningId, createdAt: new Date(), updatedAt: new Date() };
+    setLeads(prev => [...prev, newLead]);
+    // Auto-associate with current song
+    if (currentSongId) {
+      setSongs(prevSongs => {
+        const updatedSongs = prevSongs.map(song => {
+          if (song.id === currentSongId) {
+            return { ...song, leadIds: [...(song.leadIds || []), id], updatedAt: new Date() };
+          }
+          return song;
+        });
+        saveSongs(updatedSongs);
+        return updatedSongs;
+      });
+    }
+    handleActivateLead(id);
+  }
+
+  function handleDeleteLead(leadId: string) {
+    deleteLeadFromDb(leadId);
+    setLeads(prev => prev.filter(l => l.id !== leadId));
+    if (activeLeadId === leadId) handleActivateLead(null);
+    // Remove from all songs
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.leadIds?.includes(leadId)) {
+          return { ...song, leadIds: song.leadIds.filter(id => id !== leadId), updatedAt: new Date() };
+        }
+        return song;
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
+  function handleAssociateLeadWithSong(leadId: string) {
+    if (!currentSongId) return;
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === currentSongId && !(song.leadIds || []).includes(leadId)) {
+          return { ...song, leadIds: [...(song.leadIds || []), leadId], updatedAt: new Date() };
+        }
+        return song;
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
+  function handleDissociateLeadFromSong(leadId: string) {
+    if (!currentSongId) return;
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === currentSongId) {
+          return { ...song, leadIds: (song.leadIds || []).filter(id => id !== leadId), updatedAt: new Date() };
+        }
+        return song;
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+    if (activeLeadId === leadId) handleActivateLead(null);
+  }
+
   const currentSong = currentSongId ? songs.find(s => s.id === currentSongId) ?? null : null;
 
   return (
@@ -598,6 +729,7 @@ function App() {
               onChordRemove={handleChordRemove}
               onUpdateChordVoicing={handleUpdateChordVoicing}
               onAddChord={handleAddChord}
+              onAddNewVoicing={handleAddNewVoicing}
               onUpdateChordBeats={handleUpdateChordBeats}
               onAddProgression={() => handleAddProgression(currentSongId!)}
               onCreatePairing={handleCreatePairing}
@@ -607,6 +739,16 @@ function App() {
               tuning={currentTuning}
               capoSettings={capoSettings}
               bpm={currentBpm}
+              songLeadIds={currentSong.leadIds || []}
+              allLeads={leads}
+              activeLeadId={activeLeadId}
+              activeLeadNotes={activeLeadNotes}
+              onActivateLead={handleActivateLead}
+              onCreateLead={handleCreateLead}
+              onDeleteLead={handleDeleteLead}
+              onAssociateLeadWithSong={handleAssociateLeadWithSong}
+              onDissociateLeadFromSong={handleDissociateLeadFromSong}
+              songName={currentSong.name}
             />
           </section>
         )}

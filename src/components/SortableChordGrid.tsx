@@ -24,6 +24,7 @@ interface SortableChordGridProps {
   onReplace: (index: number) => void;
   onRemove: (index: number) => void;
   onUpdateVoicing?: (index: number, voicing: ChordVoicing | undefined) => void;
+  activeLeadNotes?: string[];
 }
 
 export default function SortableChordGrid({
@@ -34,6 +35,7 @@ export default function SortableChordGrid({
   onReplace,
   onRemove,
   onUpdateVoicing,
+  activeLeadNotes,
 }: SortableChordGridProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -75,6 +77,7 @@ export default function SortableChordGrid({
               onReplace={onReplace}
               onRemove={onRemove}
               onUpdateVoicing={onUpdateVoicing}
+              activeLeadNotes={activeLeadNotes}
             />
           ))}
         </div>

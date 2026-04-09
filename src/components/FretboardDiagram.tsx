@@ -8,9 +8,10 @@ interface FretboardDiagramProps {
     tuning: Tuning;
     capoSettings: CapoSettings;
     onFretClick?: (stringIndex: number, fret: number, note: string) => void;
+    activeLeadNotes?: string[];
 }
 
-export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick }: FretboardDiagramProps) {
+export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick, activeLeadNotes }: FretboardDiagramProps) {
     const effectiveTuning = capoSettings.enabled && capoSettings.fret > 0
         ? applyCapo(tuning, capoSettings.fret)
         : tuning;
@@ -28,32 +29,46 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
             </h3>
             <div className="space-y-0.5 sm:space-y-1">
                 {strings.map((stringRoot, stringIndex) => {
-                    const markers = chordNotes.flatMap((note) =>
+                    const chordMarkers = chordNotes.flatMap((note) =>
                         getFretsForNoteOnString(stringRoot, note)
                             .filter(fret => fret <= 24)
                             .filter(fret => isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0))
                             .map((fret) => ({ note, fret }))
                     );
-                
+
+                    // Lead-only markers: notes in active lead but NOT in chord
+                    const leadOnlyNotes = activeLeadNotes
+                        ? activeLeadNotes.filter(n => !chordNotes.includes(n))
+                        : [];
+                    const leadOnlyMarkers = leadOnlyNotes.flatMap((note) =>
+                        getFretsForNoteOnString(stringRoot, note)
+                            .filter(fret => fret <= 24)
+                            .filter(fret => isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0))
+                            .map((fret) => ({ note, fret }))
+                    );
+
+                    const chordNoteSet = activeLeadNotes ? new Set(activeLeadNotes) : null;
+                    const allMarkerCount = chordMarkers.length + leadOnlyMarkers.length;
+
                     return (
                         <div key={stringIndex} className="flex items-center">
                             {/* String label */}
                             <div className="w-6 sm:w-8 text-xs sm:text-sm font-medium text-gray-700">
                                 {stringRoot}
                             </div>
-                            
+
                             {/* String line with fret markers */}
                             <div className="relative flex-1 h-4 sm:h-5 mx-1 sm:mx-2 flex items-center">
                                 {/* String line */}
                                 <div className="absolute left-0 right-0 h-1 bg-gray-600 top-1/2 transform -translate-y-1/2"></div>
-                                
+
                                 {/* Fret position lines */}
                                 {fretPositions.map((position, fret) => (
                                     <div
                                         key={fret}
                                         className={`absolute top-0 bottom-0 w-px ${
-                                            capoSettings.enabled && fret === capoSettings.fret 
-                                                ? 'bg-amber-500 w-1' 
+                                            capoSettings.enabled && fret === capoSettings.fret
+                                                ? 'bg-amber-500 w-1'
                                                 : !isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0)
                                                 ? 'bg-gray-300'
                                                 : 'bg-gray-400'
@@ -61,7 +76,7 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                         style={{ left: `${position}%` }}
                                     />
                                 ))}
-                                
+
                                 {/* Capo bar */}
                                 {capoSettings.enabled && capoSettings.fret > 0 && (
                                     <div
@@ -69,24 +84,40 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                         style={{ left: `${fretPositions[capoSettings.fret]}%` }}
                                     />
                                 )}
-                                
-                                {/* Note markers */}
-                                {markers.map((marker, i) => (
+
+                                {/* Chord note markers */}
+                                {chordMarkers.map((marker, i) => (
                                     <FretMarker
-                                        key={`${marker.note}-${marker.fret}-${i}`}
+                                        key={`chord-${marker.note}-${marker.fret}-${i}`}
                                         fret={marker.fret}
                                         note={marker.note}
                                         guitarString={stringRoot}
                                         stringIndex={stringIndex}
                                         tuning={tuning}
                                         onFretClick={onFretClick}
+                                        isLeadNote={chordNoteSet?.has(marker.note)}
+                                        isOverlap={chordNoteSet?.has(marker.note)}
+                                    />
+                                ))}
+
+                                {/* Lead-only note markers */}
+                                {leadOnlyMarkers.map((marker, i) => (
+                                    <FretMarker
+                                        key={`lead-${marker.note}-${marker.fret}-${i}`}
+                                        fret={marker.fret}
+                                        note={marker.note}
+                                        guitarString={stringRoot}
+                                        stringIndex={stringIndex}
+                                        tuning={tuning}
+                                        onFretClick={onFretClick}
+                                        isLeadNote
                                     />
                                 ))}
                             </div>
-                            
+
                             {/* Fret numbers for reference */}
                             <div className="w-12 sm:w-20 text-xs text-gray-500">
-                                {markers.length > 0 ? `${markers.length} note${markers.length !== 1 ? 's' : ''}` : 'X'}
+                                {allMarkerCount > 0 ? `${allMarkerCount} note${allMarkerCount !== 1 ? 's' : ''}` : 'X'}
                             </div>
                         </div>
                     );

@@ -9,29 +9,44 @@ interface FretMarkerProps {
     stringIndex: number;
     tuning: Tuning;
     onFretClick?: (stringIndex: number, fret: number, note: string) => void;
+    isLeadNote?: boolean;
+    isOverlap?: boolean;
 }
 
-export default function FretMarker({ fret, note, guitarString, stringIndex, tuning, onFretClick }: FretMarkerProps) {
+export default function FretMarker({ fret, note, guitarString, stringIndex, tuning, onFretClick, isLeadNote, isOverlap }: FretMarkerProps) {
     const isOpenNote = fret === 0;
+    const isLeadOnly = isLeadNote && !isOverlap;
 
     const handleClick = async () => {
         await audioPlayer.playNote(note, 0.8, guitarString, fret, stringIndex, tuning);
         onFretClick?.(stringIndex, fret, note);
     };
-    
+
+    const baseClass = isLeadOnly
+        ? ''
+        : isOpenNote
+            ? 'bg-green-400 text-black border-green-600 hover:bg-green-500'
+            : 'bg-amber-400 text-black border-amber-600 hover:bg-amber-500';
+
+    const leadStyle: React.CSSProperties = isLeadOnly
+        ? { background: 'var(--lead)', borderColor: 'var(--lead)', color: '#000' }
+        : {};
+
+    const overlapStyle: React.CSSProperties = isOverlap
+        ? { boxShadow: '0 0 0 3px var(--lead)' }
+        : {};
+
     return (
         <div
-            className={`absolute w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold border-2 cursor-pointer group z-10 transition-transform hover:scale-110 ${
-                isOpenNote 
-                    ? 'bg-green-400 text-black border-green-600 hover:bg-green-500' 
-                    : 'bg-amber-400 text-black border-amber-600 hover:bg-amber-500'
-            }`}
-            style={{ 
-                left: `${getFretCenterPosition(fret)}%`, 
+            className={`absolute w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold border-2 cursor-pointer group z-10 transition-transform hover:scale-110 ${baseClass}`}
+            style={{
+                left: `${getFretCenterPosition(fret)}%`,
                 transform: 'translateX(-50%) translateY(-50%)',
-                top: '50%'
+                top: '50%',
+                ...leadStyle,
+                ...overlapStyle,
             }}
-            title={`Click to play ${note}`}
+            title={`Click to play ${note}${isLeadNote ? ' (in lead)' : ''}`}
             onClick={handleClick}
         >
             {isOpenNote ? (

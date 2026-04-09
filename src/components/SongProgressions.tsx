@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import type { NamedProgression, ChordPairing, TimeSignature } from '../types/song';
 import type { ChordVoicing } from '../types/chord';
+import type { Lead } from '../types/lead';
+import type { LeadNote } from '../types/lead';
 import type { Tuning, CapoSettings } from '../lib/tunings';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -13,6 +15,8 @@ import { SortableChordIcons } from './SortableChordIcons';
 import { BpmInput } from './BpmInput';
 import ChordForm from './ChordForm';
 import { PairedProgressionPanel } from './PairedProgressionPanel';
+import LeadSelector from './LeadSelector';
+import LeadEditor from './LeadEditor';
 
 interface SortableProgressionItemProps {
   progression: NamedProgression;
@@ -25,11 +29,13 @@ interface SortableProgressionItemProps {
   onChordRemove: (progressionId: string, chordIndex: number) => void;
   onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
+  onAddNewVoicing: (progressionId: string) => void;
   onUpdateProgressionBpm: (progressionId: string, bpm: number) => void;
   tuning: Tuning;
   capoSettings: CapoSettings;
   songBpm: number;
   isNewlyCreated?: boolean;
+  activeLeadNotes?: string[];
 }
 
 function SortableProgressionItem({
@@ -43,11 +49,13 @@ function SortableProgressionItem({
   onChordRemove,
   onUpdateChordVoicing,
   onAddChord,
+  onAddNewVoicing,
   onUpdateProgressionBpm,
   tuning,
   capoSettings,
   songBpm,
-  isNewlyCreated = false
+  isNewlyCreated = false,
+  activeLeadNotes
 }: SortableProgressionItemProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
@@ -178,7 +186,26 @@ function SortableProgressionItem({
           <div className="mt-4">
             {/* Chord Form for adding chords */}
             <div className="mb-4">
-              <ChordForm onAddChord={(chordName) => onAddChord(progression.id, chordName)} />
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <ChordForm onAddChord={(chordName) => onAddChord(progression.id, chordName)} />
+                </div>
+                <button
+                  onClick={() => onAddNewVoicing(progression.id)}
+                  className="mt-0 px-3 py-2 text-sm rounded transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    color: 'var(--text-secondary)',
+                    border: '1px solid var(--border)',
+                  }}
+                  title="Add a new chord by entering frets directly in the TAB editor"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  New Voicing
+                </button>
+              </div>
             </div>
             
             {/* Chord Grid */}
@@ -190,6 +217,7 @@ function SortableProgressionItem({
               onReplace={(index) => onChordReplace(progression.id, index)}
               onRemove={(index) => onChordRemove(progression.id, index)}
               onUpdateVoicing={(index, voicing) => onUpdateChordVoicing(progression.id, index, voicing)}
+              activeLeadNotes={activeLeadNotes}
             />
           </div>
         </div>
@@ -236,6 +264,7 @@ interface SongProgressionsProps {
   onChordRemove: (progressionId: string, chordIndex: number) => void;
   onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
+  onAddNewVoicing: (progressionId: string) => void;
   onUpdateChordBeats: (progressionId: string, chordIndex: number, beats: number) => void;
   onAddProgression?: () => void;
   onCreatePairing: (name: string, progressionIds: string[]) => string | null;
@@ -245,6 +274,16 @@ interface SongProgressionsProps {
   tuning: Tuning;
   capoSettings: CapoSettings;
   bpm: number;
+  songLeadIds: string[];
+  allLeads: Lead[];
+  activeLeadId: string | null;
+  activeLeadNotes: string[];
+  onActivateLead: (leadId: string | null) => void;
+  onCreateLead: (name: string, notes: LeadNote[], tuningId: string) => void;
+  onDeleteLead: (leadId: string) => void;
+  onAssociateLeadWithSong: (leadId: string) => void;
+  onDissociateLeadFromSong: (leadId: string) => void;
+  songName: string;
 }
 
 export default function SongProgressions({
@@ -260,6 +299,7 @@ export default function SongProgressions({
   onChordRemove,
   onUpdateChordVoicing,
   onAddChord,
+  onAddNewVoicing,
   onUpdateChordBeats,
   onAddProgression,
   onCreatePairing,
@@ -268,7 +308,17 @@ export default function SongProgressions({
   onReorderPairingProgressions,
   tuning,
   capoSettings,
-  bpm
+  bpm,
+  songLeadIds,
+  allLeads,
+  activeLeadId,
+  activeLeadNotes,
+  onActivateLead,
+  onCreateLead,
+  onDeleteLead,
+  onAssociateLeadWithSong,
+  onDissociateLeadFromSong,
+  songName,
 }: SongProgressionsProps) {
   const [expandedProgressions, setExpandedProgressions] = useState<Set<string>>(new Set());
   const [newlyCreatedProgression, setNewlyCreatedProgression] = useState<string | null>(null);
@@ -277,6 +327,8 @@ export default function SongProgressions({
   const [pairingName, setPairingName] = useState('');
   const [showPairingNameInput, setShowPairingNameInput] = useState(false);
   const [activePairingId, setActivePairingId] = useState<string | null>(null);
+  const [showLeadSelector, setShowLeadSelector] = useState(false);
+  const [showLeadEditor, setShowLeadEditor] = useState(false);
   const progressionsRef = useRef<HTMLDivElement>(null);
 
     // Auto-expand progressions that are newly created or when there's only one progression
@@ -438,6 +490,74 @@ export default function SongProgressions({
         </div>
       )}
 
+      {/* Lead Chips */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)' }}>
+          Leads:
+        </span>
+        {allLeads.filter(l => songLeadIds.includes(l.id)).map(lead => (
+          <button
+            key={lead.id}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+            style={{
+              background: activeLeadId === lead.id ? 'var(--lead)' : 'var(--lead-subtle)',
+              color: activeLeadId === lead.id ? '#000' : 'var(--text)',
+              border: `1px solid var(--lead)`,
+            }}
+            onClick={() => onActivateLead(activeLeadId === lead.id ? null : lead.id)}
+          >
+            <span>{lead.name}</span>
+            <span
+              className="ml-1 opacity-60 hover:opacity-100"
+              onClick={(e) => { e.stopPropagation(); onDissociateLeadFromSong(lead.id); }}
+              title="Remove from song"
+            >
+              &times;
+            </span>
+          </button>
+        ))}
+        <div style={{ position: 'relative' }}>
+          <button
+            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium transition-colors"
+            style={{
+              color: 'var(--lead)',
+              border: '1px dashed var(--lead)',
+              background: 'transparent',
+            }}
+            onClick={() => setShowLeadSelector(!showLeadSelector)}
+          >
+            + Lead
+          </button>
+          {showLeadSelector && (
+            <LeadSelector
+              songLeadIds={songLeadIds}
+              allLeads={allLeads}
+              activeLeadId={activeLeadId}
+              currentTuning={tuning}
+              onActivateLead={onActivateLead}
+              onAssociateLead={onAssociateLeadWithSong}
+              onDissociateLead={onDissociateLeadFromSong}
+              onNewLead={() => setShowLeadEditor(true)}
+              onClose={() => setShowLeadSelector(false)}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Lead Editor Modal */}
+      {showLeadEditor && (
+        <LeadEditor
+          tuning={tuning}
+          capoSettings={capoSettings}
+          onSave={(name, notes) => {
+            const taggedName = songName ? `${name} — ${songName}` : name;
+            onCreateLead(taggedName, notes, tuning.id);
+            setShowLeadEditor(false);
+          }}
+          onCancel={() => setShowLeadEditor(false)}
+        />
+      )}
+
       {/* Active Pairing Panel */}
       {activePairingId && (() => {
         const pairing = pairings.find(p => p.id === activePairingId);
@@ -545,11 +665,13 @@ export default function SongProgressions({
                 onChordRemove={onChordRemove}
                 onUpdateChordVoicing={onUpdateChordVoicing}
                 onAddChord={onAddChord}
+                onAddNewVoicing={onAddNewVoicing}
                 onUpdateProgressionBpm={onUpdateProgressionBpm}
                 tuning={tuning}
                 capoSettings={capoSettings}
                 songBpm={bpm}
                 isNewlyCreated={newlyCreatedProgression === progression.id}
+                activeLeadNotes={activeLeadNotes}
               />
             </div>
           ))}

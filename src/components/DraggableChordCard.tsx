@@ -16,6 +16,7 @@ interface DraggableChordCardProps {
   onReplace: (index: number) => void;
   onRemove: (index: number) => void;
   onUpdateVoicing?: (index: number, voicing: ChordVoicing | undefined) => void;
+  activeLeadNotes?: string[];
 }
 
 export default function DraggableChordCard({
@@ -26,14 +27,17 @@ export default function DraggableChordCard({
   onReplace,
   onRemove,
   onUpdateVoicing,
+  activeLeadNotes,
 }: DraggableChordCardProps) {
-  const [showVoicingEditor, setShowVoicingEditor] = useState(false);
+  const isNewVoicing = chord.notes.length === 0;
+  const [showVoicingEditor, setShowVoicingEditor] = useState(isNewVoicing);
   const [savedVoicings, setSavedVoicings] = useState<SavedVoicing[]>([]);
   const [showVoicingPicker, setShowVoicingPicker] = useState(false);
   const voicingEditorRef = useRef<ChordVoicingEditorRef>(null);
 
   // Load saved voicings for this chord's notes + tuning
   useEffect(() => {
+    if (chord.notes.length === 0) return; // skip for new voicings with no notes yet
     let cancelled = false;
     findVoicingsForNotes(chord.notes, tuning.id).then(v => {
       if (!cancelled) setSavedVoicings(v);
@@ -208,7 +212,11 @@ export default function DraggableChordCard({
       </div>
 
       <p className="text-xs sm:text-sm mb-2 text-center break-words" style={{ color: 'var(--text-secondary)' }}>
-        Notes: {chord.notes.join(", ")}
+        {isNewVoicing ? (
+          <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Enter frets below to define this voicing</span>
+        ) : (
+          <>Notes: {chord.notes.join(", ")}</>
+        )}
       </p>
 
       {/* Chord diagram (TAB when voicing exists, dot-style otherwise) */}
@@ -217,6 +225,7 @@ export default function DraggableChordCard({
         tuning={tuning}
         voicing={chord.voicing}
         onRequestVoicingEditor={() => setShowVoicingEditor(true)}
+        activeLeadNotes={activeLeadNotes}
       />
 
       {/* Fretboard hint when editor is open */}
@@ -232,6 +241,7 @@ export default function DraggableChordCard({
           tuning={tuning}
           capoSettings={capoSettings}
           onFretClick={handleFretClick}
+          activeLeadNotes={activeLeadNotes}
         />
       </div>
 

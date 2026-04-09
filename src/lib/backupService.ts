@@ -1,14 +1,22 @@
 import type { Song, SavedSong } from '../types/song';
+import type { Lead } from '../types/lead';
 import { loadSongsAsync, saveSongsAsync } from './songStorage';
+import { db } from './db';
+
+interface SavedLead extends Omit<Lead, 'createdAt' | 'updatedAt'> {
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface BackupData {
   songs: SavedSong[];
+  leads?: SavedLead[];
   timestamp: string;
   version: string;
 }
 
 const BACKUP_STORAGE_KEY = 'chordbook-backup';
-const BACKUP_VERSION = '2.0';
+const BACKUP_VERSION = '3.0';
 
 export async function createBackup(): Promise<BackupData> {
   const songs = await loadSongsAsync();
@@ -30,8 +38,16 @@ export async function createBackup(): Promise<BackupData> {
     lastOpened: song.lastOpened?.toISOString()
   }));
 
+  const allLeads = await db.leads.toArray();
+  const serializedLeads: SavedLead[] = allLeads.map(lead => ({
+    ...lead,
+    createdAt: lead.createdAt.toISOString(),
+    updatedAt: lead.updatedAt.toISOString(),
+  }));
+
   return {
     songs: serializedSongs,
+    leads: serializedLeads,
     timestamp: new Date().toISOString(),
     version: BACKUP_VERSION
   };
@@ -107,6 +123,18 @@ export async function restoreFromBackup(backup: BackupData): Promise<boolean> {
     }));
 
     await saveSongsAsync(songs);
+
+    // Restore leads if present
+    if (backup.leads && backup.leads.length > 0) {
+      const restoredLeads: Lead[] = backup.leads.map(sl => ({
+        ...sl,
+        createdAt: new Date(sl.createdAt),
+        updatedAt: new Date(sl.updatedAt),
+      }));
+      await db.leads.clear();
+      await db.leads.bulkPut(restoredLeads);
+    }
+
     return true;
   } catch (error) {
     console.error('Failed to restore from backup:', error);

@@ -17,13 +17,15 @@ interface ChordDiagramProps {
   tuning: Tuning;
   voicing?: ChordVoicing;
   onRequestVoicingEditor?: () => void;
+  activeLeadNotes?: string[];
 }
 
 // ─── TAB rendering (when voicing exists) ───
 
-function TabView({ voicing, tuning, chordName }: { voicing: ChordVoicing; tuning: Tuning; chordName: string }) {
+function TabView({ voicing, tuning, chordName, activeLeadNotes }: { voicing: ChordVoicing; tuning: Tuning; chordName: string; activeLeadNotes?: string[] }) {
   const strings = tuning.displayStrings;
   const [hoveredString, setHoveredString] = useState<number | null>(null);
+  const leadNoteSet = activeLeadNotes ? new Set(activeLeadNotes) : null;
 
   return (
     <div className="tab-box">
@@ -37,6 +39,7 @@ function TabView({ voicing, tuning, chordName }: { voicing: ChordVoicing; tuning
             const fret = voicing.frets[i];
             const isMuted = fret === null;
             const note = !isMuted && fret !== undefined ? getNoteAtFret(name, fret) : null;
+            const isInLead = note && leadNoteSet?.has(note);
             return (
               <div
                 key={i}
@@ -45,8 +48,11 @@ function TabView({ voicing, tuning, chordName }: { voicing: ChordVoicing; tuning
                 onMouseLeave={() => setHoveredString(null)}
               >
                 <span className="tab-box__string-label">{name}</span>
-                <div className="tab-box__line">
-                  <span className={`tab-box__fret ${isMuted ? 'tab-box__fret--muted' : ''}`}>
+                <div className="tab-box__line" style={{ position: 'relative' }}>
+                  <span
+                    className={`tab-box__fret ${isMuted ? 'tab-box__fret--muted' : ''}`}
+                    style={isInLead ? { boxShadow: '0 0 0 2px var(--lead)', borderRadius: '3px' } : undefined}
+                  >
                     {hoveredString === i && note ? note : isMuted ? 'X' : fret}
                   </span>
                 </div>
@@ -174,13 +180,14 @@ function getOrdinalSuffix(n: number): string {
   return 'th';
 }
 
-function DotView({ chordName, tuning }: { chordName: string; tuning: Tuning }) {
+function DotView({ chordName, tuning, activeLeadNotes }: { chordName: string; tuning: Tuning; activeLeadNotes?: string[] }) {
   const shape = calculateChordFingering(chordName, tuning);
   const [hoveredString, setHoveredString] = useState<number | null>(null);
   if (!shape) return null;
 
   const { positions, startFret, capo } = shape;
   const strings = getTuningStrings(tuning);
+  const leadNoteSet = activeLeadNotes ? new Set(activeLeadNotes) : null;
 
   return (
     <>
@@ -216,7 +223,11 @@ function DotView({ chordName, tuning }: { chordName: string; tuning: Tuning }) {
                         <div className="absolute left-1/2 h-px w-6 bg-gray-400 transform -translate-x-1/2" />
                       )}
                       {typeof pos.fret === 'number' && pos.fret === actualFret && pos.fret > 0 && (
-                        <div className="relative z-10 w-4 h-4 bg-gray-800 rounded-full flex items-center justify-center" title={note || ''}>
+                        <div
+                          className="relative z-10 w-4 h-4 bg-gray-800 rounded-full flex items-center justify-center"
+                          title={note || ''}
+                          style={note && leadNoteSet?.has(note) ? { boxShadow: '0 0 0 2px var(--lead)' } : undefined}
+                        >
                           <span className="text-white text-xs font-bold">
                             {isHovered && note ? note : pos.finger || ''}
                           </span>
@@ -226,7 +237,11 @@ function DotView({ chordName, tuning }: { chordName: string; tuning: Tuning }) {
                         <div className="relative z-10 text-red-600 text-sm font-bold">&times;</div>
                       )}
                       {pos.fret === 0 && actualFret === 0 && (
-                        <div className="relative z-10 w-4 h-4 border-2 border-gray-800 rounded-full bg-white flex items-center justify-center" title={note || ''}>
+                        <div
+                          className="relative z-10 w-4 h-4 border-2 border-gray-800 rounded-full bg-white flex items-center justify-center"
+                          title={note || ''}
+                          style={note && leadNoteSet?.has(note) ? { boxShadow: '0 0 0 2px var(--lead)' } : undefined}
+                        >
                           {isHovered && note && <span className="text-gray-800 text-xs font-bold leading-none">{note}</span>}
                         </div>
                       )}
@@ -247,12 +262,12 @@ function DotView({ chordName, tuning }: { chordName: string; tuning: Tuning }) {
 
 // ─── Public component ───
 
-export function ChordDiagram({ chordName, tuning, voicing, onRequestVoicingEditor }: ChordDiagramProps) {
+export function ChordDiagram({ chordName, tuning, voicing, onRequestVoicingEditor, activeLeadNotes }: ChordDiagramProps) {
   // TAB view when voicing exists for this tuning
   if (voicing && voicing.tuningId === tuning.id) {
     return (
       <div className="rounded-lg p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-        <TabView voicing={voicing} tuning={tuning} chordName={chordName} />
+        <TabView voicing={voicing} tuning={tuning} chordName={chordName} activeLeadNotes={activeLeadNotes} />
       </div>
     );
   }
@@ -262,7 +277,7 @@ export function ChordDiagram({ chordName, tuning, voicing, onRequestVoicingEdito
   if (hasFingering) {
     return (
       <div className="rounded-lg p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-        <DotView chordName={chordName} tuning={tuning} />
+        <DotView chordName={chordName} tuning={tuning} activeLeadNotes={activeLeadNotes} />
       </div>
     );
   }

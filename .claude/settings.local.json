@@ -4,7 +4,13 @@
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
       "Bash(npx vite:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(node:*)",
+      "Bash(wc -l /Users/kabdellah/dev/chordbook/src/components/*.tsx)",
+      "Bash(grep -n \"DraggableChordCard\\\\|SortableChordGrid\\\\|SongProgressions\" /Users/kabdellah/dev/chordbook/src/components/*.tsx)",
+      "Bash(grep -r \"useState.*boolean\\\\|state.*toggle\" /Users/kabdellah/dev/chordbook/src/components/*.tsx)",
+      "Bash(wc -l /Users/kabdellah/dev/chordbook/src/**/*.ts /Users/kabdellah/dev/chordbook/src/**/*.tsx)"
     ]
   }
 }

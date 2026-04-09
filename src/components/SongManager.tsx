@@ -58,9 +58,9 @@ export default function SongManager({
     <div
       key={song.id}
       onClick={() => onSelectSong(song)}
-      className="themed-card themed-card-interactive p-5 cursor-pointer"
+      className="themed-card themed-card-interactive p-6"
     >
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-4">
         <h3 className="text-base font-semibold truncate flex-1 pr-2" style={{ fontFamily: 'var(--font-body)', color: 'var(--card-text)' }}>
           {song.name}
         </h3>
@@ -70,7 +70,7 @@ export default function SongManager({
           style={{ color: 'var(--card-text-muted)' }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
           onMouseLeave={e => (e.currentTarget.style.color = 'var(--card-text-muted)')}
->
+        >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
@@ -81,19 +81,19 @@ export default function SongManager({
         {song.progressions.length} progression{song.progressions.length !== 1 ? 's' : ''}
       </p>
       {song.lastOpened && (
-        <p className="text-xs mb-3" style={{ color: 'var(--card-text-muted)' }}>
+        <p className="text-xs mb-2" style={{ color: 'var(--card-text-muted)' }}>
           Last opened {song.lastOpened.toLocaleDateString()}
         </p>
       )}
 
       {showBpmTuning && (
-        <p className="text-xs mb-3" style={{ color: 'var(--card-text-muted)' }}>
+        <p className="text-xs mb-2" style={{ color: 'var(--card-text-muted)' }}>
           {song.bpm || 120} BPM &middot; {song.tuning?.name || DEFAULT_TUNING.name}
         </p>
       )}
 
       {song.progressions.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2 mt-2">
           {song.progressions.slice(0, 3).map((prog, i) => (
             <span key={i} className="themed-tag">{prog.name}</span>
           ))}

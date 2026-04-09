@@ -29,6 +29,8 @@ export interface Theme {
     cardText: string;
     cardTextSecondary: string;
     cardTextMuted: string;
+    lead: string;
+    leadSubtle: string;
   };
 }
 
@@ -62,6 +64,8 @@ export const themes: Theme[] = [
       cardText: '#3b2f1e',
       cardTextSecondary: '#6b5a43',
       cardTextMuted: '#b8a48c',
+      lead: '#7c8cf8',
+      leadSubtle: 'rgba(124,140,248,0.18)',
     },
   },
   {
@@ -93,6 +97,8 @@ export const themes: Theme[] = [
       cardText: '#e5e5e5',
       cardTextSecondary: '#a3a3a3',
       cardTextMuted: '#636363',
+      lead: '#86efac',
+      leadSubtle: 'rgba(134,239,172,0.18)',
     },
   },
   {
@@ -124,6 +130,8 @@ export const themes: Theme[] = [
       cardText: '#1a1335',
       cardTextSecondary: '#3d3566',
       cardTextMuted: '#8b82b0',
+      lead: '#86efac',
+      leadSubtle: 'rgba(134,239,172,0.18)',
     },
   },
   {
@@ -155,6 +163,8 @@ export const themes: Theme[] = [
       cardText: '#1b2e24',
       cardTextSecondary: '#3a5c48',
       cardTextMuted: '#7d9a89',
+      lead: '#b4a6f8',
+      leadSubtle: 'rgba(180,166,248,0.18)',
     },
   },
   {
@@ -186,6 +196,8 @@ export const themes: Theme[] = [
       cardText: '#e2dff0',
       cardTextSecondary: '#a9a4c0',
       cardTextMuted: '#5e587a',
+      lead: '#86efac',
+      leadSubtle: 'rgba(134,239,172,0.18)',
     },
   },
 ];
