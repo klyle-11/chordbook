@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { NamedProgression } from '../types/song';
+import type { NamedProgression, ChordPairing, TimeSignature } from '../types/song';
 import type { ChordVoicing } from '../types/chord';
 import type { Tuning, CapoSettings } from '../lib/tunings';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -12,6 +12,7 @@ import { formatSongInfo } from '../lib/displayUtils';
 import { SortableChordIcons } from './SortableChordIcons';
 import { BpmInput } from './BpmInput';
 import ChordForm from './ChordForm';
+import { PairedProgressionPanel } from './PairedProgressionPanel';
 
 interface SortableProgressionItemProps {
   progression: NamedProgression;
@@ -224,6 +225,8 @@ function SortableProgressionItem({
 
 interface SongProgressionsProps {
   progressions: NamedProgression[];
+  pairings: ChordPairing[];
+  timeSignature: TimeSignature;
   onReorderProgressions: (oldIndex: number, newIndex: number) => void;
   onEditProgression: (progressionId: string, field: 'name', value: string) => void;
   onUpdateProgressionBpm: (progressionId: string, bpm: number) => void;
@@ -233,7 +236,12 @@ interface SongProgressionsProps {
   onChordRemove: (progressionId: string, chordIndex: number) => void;
   onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
+  onUpdateChordBeats: (progressionId: string, chordIndex: number, beats: number) => void;
   onAddProgression?: () => void;
+  onCreatePairing: (name: string, progressionIds: string[]) => string | null;
+  onDeletePairing: (pairingId: string) => void;
+  onRenamePairing: (pairingId: string, name: string) => void;
+  onReorderPairingProgressions: (pairingId: string, oldIndex: number, newIndex: number) => void;
   tuning: Tuning;
   capoSettings: CapoSettings;
   bpm: number;
@@ -241,6 +249,8 @@ interface SongProgressionsProps {
 
 export default function SongProgressions({
   progressions,
+  pairings,
+  timeSignature,
   onReorderProgressions,
   onEditProgression,
   onUpdateProgressionBpm,
@@ -250,13 +260,23 @@ export default function SongProgressions({
   onChordRemove,
   onUpdateChordVoicing,
   onAddChord,
+  onUpdateChordBeats,
   onAddProgression,
+  onCreatePairing,
+  onDeletePairing,
+  onRenamePairing,
+  onReorderPairingProgressions,
   tuning,
   capoSettings,
   bpm
 }: SongProgressionsProps) {
   const [expandedProgressions, setExpandedProgressions] = useState<Set<string>>(new Set());
   const [newlyCreatedProgression, setNewlyCreatedProgression] = useState<string | null>(null);
+  const [pairingMode, setPairingMode] = useState(false);
+  const [selectedForPairing, setSelectedForPairing] = useState<Set<string>>(new Set());
+  const [pairingName, setPairingName] = useState('');
+  const [showPairingNameInput, setShowPairingNameInput] = useState(false);
+  const [activePairingId, setActivePairingId] = useState<string | null>(null);
   const progressionsRef = useRef<HTMLDivElement>(null);
 
     // Auto-expand progressions that are newly created or when there's only one progression
@@ -362,14 +382,91 @@ export default function SongProgressions({
     );
   }
 
+  const togglePairingSelection = (progressionId: string) => {
+    setSelectedForPairing(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(progressionId)) {
+        newSet.delete(progressionId);
+      } else {
+        newSet.add(progressionId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleCreatePairingConfirm = () => {
+    const name = pairingName.trim() || `Pair ${pairings.length + 1}`;
+    const newId = onCreatePairing(name, Array.from(selectedForPairing));
+    if (newId) setActivePairingId(newId);
+    setPairingMode(false);
+    setSelectedForPairing(new Set());
+    setPairingName('');
+    setShowPairingNameInput(false);
+  };
+
+  const cancelPairingMode = () => {
+    setPairingMode(false);
+    setSelectedForPairing(new Set());
+    setPairingName('');
+    setShowPairingNameInput(false);
+  };
+
   return (
     <div className="space-y-4" ref={progressionsRef}>
+      {/* Pairing Chips */}
+      {pairings.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)' }}>
+            Pairings:
+          </span>
+          {pairings.map(pairing => (
+            <button
+              key={pairing.id}
+              className={`pairing-chip ${activePairingId === pairing.id ? 'pairing-chip--active' : ''}`}
+              onClick={() => setActivePairingId(activePairingId === pairing.id ? null : pairing.id)}
+            >
+              <span>{pairing.name}</span>
+              <span
+                className="pairing-chip__remove"
+                onClick={(e) => { e.stopPropagation(); onDeletePairing(pairing.id); if (activePairingId === pairing.id) setActivePairingId(null); }}
+                title="Remove pairing"
+              >
+                &times;
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Active Pairing Panel */}
+      {activePairingId && (() => {
+        const pairing = pairings.find(p => p.id === activePairingId);
+        if (!pairing) return null;
+        const pairedProgressions = pairing.progressionIds
+          .map(id => progressions.find(p => p.id === id))
+          .filter((p): p is NamedProgression => p !== undefined);
+        return (
+          <PairedProgressionPanel
+            pairing={pairing}
+            progressions={pairedProgressions}
+            timeSignature={timeSignature}
+            bpm={bpm}
+            onUpdateChordBeats={onUpdateChordBeats}
+            onRenamePairing={onRenamePairing}
+            onDeletePairing={(id) => { onDeletePairing(id); setActivePairingId(null); }}
+            onReorderPairingProgressions={onReorderPairingProgressions}
+            onClose={() => setActivePairingId(null)}
+          />
+        );
+      })()}
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h3 className="text-lg font-medium text-gray-800">
+          <h3 className="text-lg font-medium" style={{ color: 'var(--text)', fontFamily: 'var(--font-body)' }}>
             Chord Progressions ({progressions.length})
           </h3>
-          {onAddProgression && (
+          {onAddProgression && !pairingMode && (
             <button
               onClick={handleAddProgression}
               className="flex items-center justify-center w-5 h-5 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
@@ -381,6 +478,20 @@ export default function SongProgressions({
             </button>
           )}
         </div>
+        {progressions.length >= 2 && !pairingMode && (
+          <button
+            className="themed-btn-secondary"
+            style={{ fontSize: '0.8rem', padding: '4px 12px' }}
+            onClick={() => setPairingMode(true)}
+          >
+            Pair
+          </button>
+        )}
+        {pairingMode && (
+          <span className="text-sm" style={{ color: 'var(--accent)', fontFamily: 'var(--font-ui)' }}>
+            Select 2+ progressions to pair
+          </span>
+        )}
       </div>
 
       <DndContext 
@@ -393,27 +504,96 @@ export default function SongProgressions({
           strategy={verticalListSortingStrategy}
         >
           {progressions.map((progression) => (
-            <SortableProgressionItem
-              key={progression.id}
-              progression={progression}
-              isExpanded={expandedProgressions.has(progression.id)}
-              onToggle={() => toggleExpanded(progression.id)}
-              onEdit={onEditProgression}
-              onDelete={onDeleteProgression}
-              onChordReorder={onChordReorder}
-              onChordReplace={onChordReplace}
-              onChordRemove={onChordRemove}
-              onUpdateChordVoicing={onUpdateChordVoicing}
-              onAddChord={onAddChord}
-              onUpdateProgressionBpm={onUpdateProgressionBpm}
-              tuning={tuning}
-              capoSettings={capoSettings}
-              songBpm={bpm}
-              isNewlyCreated={newlyCreatedProgression === progression.id}
-            />
+            <div key={progression.id} className="relative">
+              {pairingMode && (
+                <div
+                  className="absolute inset-0 z-10 flex items-center cursor-pointer rounded-xl"
+                  style={{
+                    background: selectedForPairing.has(progression.id) ? 'rgba(var(--accent-rgb, 99,102,241), 0.08)' : 'transparent',
+                    border: selectedForPairing.has(progression.id) ? '2px solid var(--accent)' : '2px solid transparent',
+                    borderRadius: '0.75rem',
+                  }}
+                  onClick={() => togglePairingSelection(progression.id)}
+                >
+                  <div className="ml-4">
+                    <div
+                      style={{
+                        width: 22, height: 22,
+                        borderRadius: 4,
+                        border: `2px solid ${selectedForPairing.has(progression.id) ? 'var(--accent)' : 'var(--border)'}`,
+                        background: selectedForPairing.has(progression.id) ? 'var(--accent)' : 'var(--bg-card)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      {selectedForPairing.has(progression.id) && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <SortableProgressionItem
+                progression={progression}
+                isExpanded={!pairingMode && expandedProgressions.has(progression.id)}
+                onToggle={() => !pairingMode && toggleExpanded(progression.id)}
+                onEdit={onEditProgression}
+                onDelete={onDeleteProgression}
+                onChordReorder={onChordReorder}
+                onChordReplace={onChordReplace}
+                onChordRemove={onChordRemove}
+                onUpdateChordVoicing={onUpdateChordVoicing}
+                onAddChord={onAddChord}
+                onUpdateProgressionBpm={onUpdateProgressionBpm}
+                tuning={tuning}
+                capoSettings={capoSettings}
+                songBpm={bpm}
+                isNewlyCreated={newlyCreatedProgression === progression.id}
+              />
+            </div>
           ))}
         </SortableContext>
       </DndContext>
+
+      {/* Pairing Mode Action Bar */}
+      {pairingMode && (
+        <div className="pairing-select-bar">
+          {showPairingNameInput ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="text"
+                value={pairingName}
+                onChange={e => setPairingName(e.target.value)}
+                placeholder="Pairing name..."
+                className="themed-input"
+                style={{ width: 180, fontSize: '0.85rem', padding: '6px 10px' }}
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') handleCreatePairingConfirm(); }}
+              />
+              <button className="themed-btn-primary" onClick={handleCreatePairingConfirm}>
+                Create
+              </button>
+              <button className="themed-btn-secondary" onClick={cancelPairingMode}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                className="themed-btn-primary"
+                disabled={selectedForPairing.size < 2}
+                onClick={() => setShowPairingNameInput(true)}
+              >
+                Create Pair ({selectedForPairing.size} selected)
+              </button>
+              <button className="themed-btn-secondary" onClick={cancelPairingMode}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

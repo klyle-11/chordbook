@@ -65,9 +65,9 @@ class CapoErrorBoundary extends Component<Props, State> {
     this.props.onError?.(error);
 
     // Force garbage collection if available
-    if (window.gc && (this.state.isV8Crash || this.state.isFileSystemError)) {
+    if ((window as any).gc && (this.state.isV8Crash || this.state.isFileSystemError)) {
       try {
-        window.gc();
+        (window as any).gc();
         console.log('🧹 Forced garbage collection after capo error');
       } catch (gcError) {
         console.warn('Failed to force GC:', gcError);

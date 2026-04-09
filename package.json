@@ -18,7 +18,7 @@
     "@tonaljs/tonal": "^4.10.0",
     "dexie": "^4.4.2",
     "html2canvas": "^1.4.1",
-    "jspdf": "^3.0.1",
+    "jspdf": "^4.2.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
@@ -27,6 +27,7 @@
     "@tailwindcss/postcss": "^4.1.11",
     "@tauri-apps/cli": "^2.10.1",
     "@types/jspdf": "^2.0.0",
+    "@types/node": "^25.5.2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",

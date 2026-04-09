@@ -24,4 +24,10 @@ db.version(2).stores({
   savedVoicings: 'id, name, tuningId',
 });
 
+db.version(3).stores({
+  songs: 'id, name, updatedAt, lastOpened',
+  appState: 'key',
+  savedVoicings: 'id, name, tuningId',
+});
+
 export { db };

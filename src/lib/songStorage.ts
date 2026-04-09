@@ -11,6 +11,10 @@ export function generateProgressionId(): string {
   return 'prog-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
+export function generatePairingId(): string {
+  return 'pair-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
 // --- Async DB-backed functions ---
 
 export async function loadSongsAsync(): Promise<Song[]> {

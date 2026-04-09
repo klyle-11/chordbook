@@ -20,6 +20,11 @@ export async function createBackup(): Promise<BackupData> {
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString()
     })),
+    pairings: song.pairings?.map(pair => ({
+      ...pair,
+      createdAt: pair.createdAt.toISOString(),
+      updatedAt: pair.updatedAt.toISOString()
+    })),
     createdAt: song.createdAt.toISOString(),
     updatedAt: song.updatedAt.toISOString(),
     lastOpened: song.lastOpened?.toISOString()
@@ -90,6 +95,11 @@ export async function restoreFromBackup(backup: BackupData): Promise<boolean> {
         ...p,
         createdAt: new Date(p.createdAt),
         updatedAt: new Date(p.updatedAt)
+      })),
+      pairings: savedSong.pairings?.map(pair => ({
+        ...pair,
+        createdAt: new Date(pair.createdAt),
+        updatedAt: new Date(pair.updatedAt)
       })),
       createdAt: new Date(savedSong.createdAt),
       updatedAt: new Date(savedSong.updatedAt),

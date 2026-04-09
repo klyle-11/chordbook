@@ -7,6 +7,7 @@ export interface Chord {
   name: string;
   notes: string[];
   voicing?: ChordVoicing;
+  beats?: number; // duration in beats; defaults to beatsPerMeasure when absent
 }
 
 export interface SavedVoicing {

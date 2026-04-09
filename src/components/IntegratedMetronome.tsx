@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { audioPlayer } from '../lib/audioPlayer';
+import type { TimeSignature } from '../types/song';
 
 interface IntegratedMetronomeProps {
   onTempoChange?: (bpm: number) => void;
   currentBpm?: number;
   disabled?: boolean;
+  timeSignature?: TimeSignature;
 }
 
-export function IntegratedMetronome({ onTempoChange, currentBpm, disabled }: IntegratedMetronomeProps) {
+export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeSignature }: IntegratedMetronomeProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const [showClickVol, setShowClickVol] = useState(false);
@@ -17,11 +19,14 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled }: Int
   const [masterVolume, setMasterVolume] = useState(audioPlayer.getVolume());
   const [isMasterMuted, setIsMasterMuted] = useState(false);
 
+  const beatsPerMeasure = timeSignature?.beatsPerMeasure ?? 4;
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const bpmValidationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentChordIndex = useRef<number>(0);
+  const beatCountRef = useRef<number>(0);
   const isSyncingRef = useRef(false);
 
   useEffect(() => {
@@ -53,17 +58,17 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled }: Int
     audioPlayer.setVolume(isMasterMuted ? 0 : masterVolume);
   }, [masterVolume, isMasterMuted]);
 
-  const playClick = useCallback(() => {
+  const playClick = useCallback((accent = false) => {
     if (!audioContextRef.current) return;
     const context = audioContextRef.current;
     const oscillator = context.createOscillator();
     const gainNode = context.createGain();
     oscillator.connect(gainNode);
     gainNode.connect(context.destination);
-    oscillator.frequency.setValueAtTime(800, context.currentTime);
+    oscillator.frequency.setValueAtTime(accent ? 1200 : 800, context.currentTime);
     oscillator.type = 'sine';
     gainNode.gain.setValueAtTime(0, context.currentTime);
-    gainNode.gain.linearRampToValueAtTime(clickVolume, context.currentTime + 0.01);
+    gainNode.gain.linearRampToValueAtTime(accent ? Math.min(clickVolume * 1.3, 1) : clickVolume, context.currentTime + 0.01);
     gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.1);
     oscillator.start(context.currentTime);
     oscillator.stop(context.currentTime + 0.1);
@@ -72,10 +77,16 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled }: Int
   const startMetronome = useCallback(() => {
     if (intervalRef.current) return;
     const interval = 60000 / bpm;
-    playClick();
-    intervalRef.current = setInterval(() => { playClick(); }, interval);
+    beatCountRef.current = 0;
+    playClick(true); // first beat is accented
+    beatCountRef.current = 1;
+    intervalRef.current = setInterval(() => {
+      const isAccent = beatCountRef.current % beatsPerMeasure === 0;
+      playClick(isAccent);
+      beatCountRef.current++;
+    }, interval);
     setIsPlaying(true);
-  }, [bpm, playClick]);
+  }, [bpm, beatsPerMeasure, playClick]);
 
   const stopMetronome = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
@@ -84,7 +95,7 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled }: Int
 
   const startAutoScroll = useCallback(() => {
     if (scrollIntervalRef.current) return;
-    const interval = (60000 / bpm) * 4;
+    const interval = (60000 / bpm) * beatsPerMeasure;
     currentChordIndex.current = 0;
     const scrollToNextChord = () => {
       const chordElements = document.querySelectorAll('[data-chord-diagram]');
@@ -100,7 +111,7 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled }: Int
     scrollToNextChord();
     scrollIntervalRef.current = setInterval(scrollToNextChord, interval);
     setIsScrolling(true);
-  }, [bpm]);
+  }, [bpm, beatsPerMeasure]);
 
   const stopAutoScroll = useCallback(() => {
     if (scrollIntervalRef.current) { clearInterval(scrollIntervalRef.current); scrollIntervalRef.current = null; }
@@ -112,7 +123,7 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled }: Int
     if (isScrolling && scrollIntervalRef.current) {
       clearInterval(scrollIntervalRef.current);
       scrollIntervalRef.current = null;
-      const interval = (60000 / bpm) * 4;
+      const interval = (60000 / bpm) * beatsPerMeasure;
       const scrollToNextChord = () => {
         const chordElements = document.querySelectorAll('[data-chord-diagram]');
         if (chordElements.length === 0) return;
@@ -126,7 +137,7 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled }: Int
       };
       scrollIntervalRef.current = setInterval(scrollToNextChord, interval);
     }
-  }, [bpm, isScrolling]);
+  }, [bpm, beatsPerMeasure, isScrolling]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getNotesForChord } from './lib/chordUtils';
-import type { Song } from './types/song';
+import type { Song, TimeSignature, ChordPairing } from './types/song';
 import type { ChordVoicing } from './types/chord';
 import { DEFAULT_TUNING, type Tuning, type CapoSettings } from './lib/tunings';
 import {
@@ -11,6 +11,7 @@ import {
   migrateLocalStorageToDB,
   generateSongId,
   generateProgressionId,
+  generatePairingId,
   updateProgressionBpm
 } from './lib/songStorage';
 import { loadTheme, saveTheme, applyTheme, type Theme, themes } from './lib/theme';
@@ -23,6 +24,7 @@ import { IntegratedMetronome } from './components/IntegratedMetronome';
 import SongManager from './components/SongManager';
 import SongProgressions from './components/SongProgressions';
 import ThemePicker from './components/ThemePicker';
+import { TimeSignatureSelector } from './components/TimeSignatureSelector';
 
 function App() {
   const [songs, setSongs] = useState<Song[]>([]);
@@ -31,6 +33,7 @@ function App() {
   const [capoSettings, setCapoSettings] = useState<CapoSettings>({ fret: 0, enabled: false });
   const [currentBpm, setCurrentBpm] = useState<number>(120);
   const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0]);
+  const [currentTimeSignature, setCurrentTimeSignature] = useState<TimeSignature>({ beatsPerMeasure: 4, beatUnit: 4 });
 
   useEffect(() => {
     async function init() {
@@ -50,6 +53,7 @@ function App() {
           setCurrentTuning(song.tuning || DEFAULT_TUNING);
           setCapoSettings(song.capoSettings || { fret: 0, enabled: false });
           setCurrentBpm(song.bpm || 120);
+          setCurrentTimeSignature(song.timeSignature || { beatsPerMeasure: 4, beatUnit: 4 });
         }
       }
     }
@@ -86,6 +90,18 @@ function App() {
     });
   }
 
+  function handleTimeSignatureChange(ts: TimeSignature) {
+    setCurrentTimeSignature(ts);
+    if (!currentSongId) return;
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song =>
+        song.id === currentSongId ? { ...song, timeSignature: ts, updatedAt: new Date() } : song
+      );
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
   function handleSongBpmChange(songId: string, newBpm: number) {
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song =>
@@ -107,6 +123,7 @@ function App() {
     setCurrentTuning(song.tuning || DEFAULT_TUNING);
     setCapoSettings(song.capoSettings || { fret: 0, enabled: false });
     setCurrentBpm(song.bpm || 120);
+    setCurrentTimeSignature(song.timeSignature || { beatsPerMeasure: 4, beatUnit: 4 });
   }
 
   function handleCreateSong(name: string) {
@@ -218,7 +235,18 @@ function App() {
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
         if (song.id === currentSongId) {
-          return { ...song, progressions: song.progressions.filter(p => p.id !== progressionId), updatedAt: new Date() };
+          const updatedPairings = (song.pairings || [])
+            .map(p => ({
+              ...p,
+              progressionIds: p.progressionIds.filter(id => id !== progressionId)
+            }))
+            .filter(p => p.progressionIds.length >= 2);
+          return {
+            ...song,
+            progressions: song.progressions.filter(p => p.id !== progressionId),
+            pairings: updatedPairings,
+            updatedAt: new Date()
+          };
         }
         return song;
       });
@@ -349,6 +377,116 @@ function App() {
     });
   }
 
+  // ─── Chord Beats ───
+
+  function handleUpdateChordBeats(progressionId: string, chordIndex: number, beats: number) {
+    if (!currentSongId) return;
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === currentSongId) {
+          const updatedProgressions = song.progressions.map(p => {
+            if (p.id === progressionId) {
+              const updatedChords = p.chords.map((c, i) =>
+                i === chordIndex ? { ...c, beats } : c
+              );
+              return { ...p, chords: updatedChords, updatedAt: new Date() };
+            }
+            return p;
+          });
+          return { ...song, progressions: updatedProgressions, updatedAt: new Date() };
+        }
+        return song;
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
+  // ─── Pairing CRUD ───
+
+  function handleCreatePairing(name: string, progressionIds: string[]): string | null {
+    if (!currentSongId || progressionIds.length < 2) return null;
+    const now = new Date();
+    const newPairing: ChordPairing = {
+      id: generatePairingId(),
+      name,
+      progressionIds,
+      createdAt: now,
+      updatedAt: now
+    };
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === currentSongId) {
+          return { ...song, pairings: [...(song.pairings || []), newPairing], updatedAt: now };
+        }
+        return song;
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+    return newPairing.id;
+  }
+
+  function handleDeletePairing(pairingId: string) {
+    if (!currentSongId) return;
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === currentSongId) {
+          return { ...song, pairings: (song.pairings || []).filter(p => p.id !== pairingId), updatedAt: new Date() };
+        }
+        return song;
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
+  function handleRenamePairing(pairingId: string, name: string) {
+    if (!currentSongId) return;
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === currentSongId) {
+          return {
+            ...song,
+            pairings: (song.pairings || []).map(p =>
+              p.id === pairingId ? { ...p, name, updatedAt: new Date() } : p
+            ),
+            updatedAt: new Date()
+          };
+        }
+        return song;
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
+  function handleReorderPairingProgressions(pairingId: string, oldIndex: number, newIndex: number) {
+    if (!currentSongId) return;
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id === currentSongId) {
+          return {
+            ...song,
+            pairings: (song.pairings || []).map(p => {
+              if (p.id === pairingId) {
+                const ids = [...p.progressionIds];
+                const [item] = ids.splice(oldIndex, 1);
+                ids.splice(newIndex, 0, item);
+                return { ...p, progressionIds: ids, updatedAt: new Date() };
+              }
+              return p;
+            }),
+            updatedAt: new Date()
+          };
+        }
+        return song;
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
   const currentSong = currentSongId ? songs.find(s => s.id === currentSongId) ?? null : null;
 
   return (
@@ -382,6 +520,12 @@ function App() {
                   if (currentSongId) handleSongBpmChange(currentSongId, bpm);
                 }}
                 currentBpm={currentBpm}
+                disabled={!currentSongId}
+                timeSignature={currentTimeSignature}
+              />
+              <TimeSignatureSelector
+                timeSignature={currentTimeSignature}
+                onChange={handleTimeSignatureChange}
                 disabled={!currentSongId}
               />
               <TuningSelector
@@ -443,6 +587,8 @@ function App() {
           <section>
             <SongProgressions
               progressions={currentSong.progressions || []}
+              pairings={currentSong.pairings || []}
+              timeSignature={currentTimeSignature}
               onReorderProgressions={handleReorderProgressions}
               onEditProgression={handleEditProgression}
               onUpdateProgressionBpm={handleUpdateProgressionBpm}
@@ -452,7 +598,12 @@ function App() {
               onChordRemove={handleChordRemove}
               onUpdateChordVoicing={handleUpdateChordVoicing}
               onAddChord={handleAddChord}
+              onUpdateChordBeats={handleUpdateChordBeats}
               onAddProgression={() => handleAddProgression(currentSongId!)}
+              onCreatePairing={handleCreatePairing}
+              onDeletePairing={handleDeletePairing}
+              onRenamePairing={handleRenamePairing}
+              onReorderPairingProgressions={handleReorderPairingProgressions}
               tuning={currentTuning}
               capoSettings={capoSettings}
               bpm={currentBpm}
