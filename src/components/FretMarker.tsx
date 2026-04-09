@@ -13,9 +13,10 @@ interface FretMarkerProps {
     isOverlap?: boolean;
     isVoicing?: boolean;
     isOctaveVoicing?: boolean;
+    isRoot?: boolean;
 }
 
-export default function FretMarker({ fret, note, guitarString, stringIndex, tuning, onFretClick, isLeadNote, isOverlap, isVoicing, isOctaveVoicing }: FretMarkerProps) {
+export default function FretMarker({ fret, note, guitarString, stringIndex, tuning, onFretClick, isLeadNote, isOverlap, isVoicing, isOctaveVoicing, isRoot }: FretMarkerProps) {
     const isOpenNote = fret === 0;
     const isLeadOnly = isLeadNote && !isOverlap;
 
@@ -24,34 +25,33 @@ export default function FretMarker({ fret, note, guitarString, stringIndex, tuni
         onFretClick?.(stringIndex, fret, note);
     };
 
-    const baseClass = isLeadOnly
-        ? ''
-        : isOpenNote
-            ? 'bg-green-400 text-black border-green-600 hover:bg-green-500'
-            : 'bg-amber-400 text-black border-amber-600 hover:bg-amber-500';
-
-    const leadStyle: React.CSSProperties = isLeadOnly
+    const baseStyle: React.CSSProperties = isLeadOnly
         ? { background: 'var(--lead)', borderColor: 'var(--lead)', color: '#000' }
-        : {};
+        : { background: 'var(--accent)', borderColor: 'var(--accent-hover)', color: '#fff' };
 
     const overlapStyle: React.CSSProperties = isOverlap
         ? { boxShadow: '0 0 0 3px var(--lead)' }
         : {};
 
     const voicingStyle: React.CSSProperties = isVoicing
-        ? { boxShadow: '0 0 0 3px var(--accent), 0 0 8px var(--accent)', zIndex: 20 }
+        ? { boxShadow: '0 0 0 3px var(--glow), 0 0 10px var(--glow), 0 0 20px var(--glow-subtle)', zIndex: 20 }
         : isOctaveVoicing
-        ? { opacity: 0.45, boxShadow: '0 0 0 2px var(--accent)', zIndex: 15 }
+        ? { boxShadow: '0 0 0 2px var(--glow)', zIndex: 15 }
+        : {};
+
+    const rootStyle: React.CSSProperties = isRoot
+        ? { background: '#6b3a2a', borderColor: '#4a2218', color: '#f0e0d0' }
         : {};
 
     return (
         <div
-            className={`absolute w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold border-2 cursor-pointer group z-10 transition-transform hover:scale-110 ${baseClass}`}
+            className="absolute w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold border-2 cursor-pointer group z-10 transition-transform hover:scale-110"
             style={{
                 left: `${getFretCenterPosition(fret)}%`,
                 transform: 'translateX(-50%) translateY(-50%)',
                 top: '50%',
-                ...leadStyle,
+                ...baseStyle,
+                ...rootStyle,
                 ...overlapStyle,
                 ...voicingStyle,
             }}

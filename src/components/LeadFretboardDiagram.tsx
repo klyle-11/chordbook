@@ -91,7 +91,7 @@ export default function LeadFretboardDiagram({ tuning, capoSettings, currentLead
               </div>
               <div className="relative flex-1 h-5 sm:h-6 mx-1 sm:mx-2 flex items-center">
                 {/* String line */}
-                <div className="absolute left-0 right-0 h-px top-1/2 transform -translate-y-1/2" style={{ background: 'var(--border-hover)' }} />
+                <div className="absolute left-0 right-0 h-px top-1/2 transform -translate-y-1/2" style={{ background: 'var(--fret-string)' }} />
 
                 {/* Fret position lines */}
                 {fretPositions.slice(0, maxFret + 1).map((position, fret) => (
@@ -101,10 +101,10 @@ export default function LeadFretboardDiagram({ tuning, capoSettings, currentLead
                     style={{
                       left: `${(position / fretPositions[maxFret]) * 100}%`,
                       background: capoSettings.enabled && fret === capoSettings.fret
-                        ? 'var(--accent)'
+                        ? 'var(--glow)'
                         : !isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0)
-                        ? 'var(--border)'
-                        : 'var(--border-hover)',
+                        ? 'var(--fret-divider-muted)'
+                        : 'var(--fret-divider)',
                     }}
                   />
                 ))}
@@ -126,8 +126,8 @@ export default function LeadFretboardDiagram({ tuning, capoSettings, currentLead
                         left: `${centerPos}%`,
                         transform: 'translateX(-50%) translateY(-50%)',
                         top: '50%',
-                        background: inLead ? 'var(--lead)' : fret === 0 ? '#4ade80' : '#fbbf24',
-                        border: `2px solid ${inLead ? 'var(--lead)' : fret === 0 ? '#16a34a' : '#d97706'}`,
+                        background: inLead ? 'var(--lead)' : fret === 0 ? 'var(--fret-marker-open)' : 'var(--fret-marker)',
+                        border: `2px solid ${inLead ? 'var(--lead)' : fret === 0 ? 'var(--fret-marker-open-border)' : 'var(--fret-marker-border)'}`,
                         color: '#000',
                         boxShadow: inLead ? '0 0 0 2px var(--lead-subtle)' : undefined,
                       }}

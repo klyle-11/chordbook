@@ -84,20 +84,22 @@ export default function DraggableChordCard({
         style={{
           ...style,
           background: 'var(--bg-card)',
-          borderColor: isSelected ? 'var(--accent)' : isDragging ? 'var(--accent)' : 'var(--border)',
+          borderColor: isSelected ? 'var(--glow)' : isDragging ? 'var(--glow)' : 'var(--border)',
+          boxShadow: isSelected ? '0 0 8px var(--glow-subtle)' : undefined,
         }}
         {...attributes}
         data-chord-diagram
         className={`rounded-lg p-2 transition-all duration-200 border-2 shadow-sm cursor-pointer ${
           isDragging ? 'opacity-70 shadow-2xl z-50 scale-105' : ''
-        } ${isSelected ? 'ring-1 ring-[var(--accent)]' : ''}`}
+        }`}
         onClick={() => onSelect?.(index)}
       >
       {/* Compact header: drag handle + action buttons */}
       <div className="flex items-center justify-between mb-1">
         <div
           {...listeners}
-          className="cursor-grab active:cursor-grabbing p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+          className="cursor-grab active:cursor-grabbing p-0.5 transition-colors"
+          style={{ color: 'var(--text-muted)' }}
           title="Drag to reorder"
           onClick={(e) => e.stopPropagation()}
         >

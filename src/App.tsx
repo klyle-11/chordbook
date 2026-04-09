@@ -379,9 +379,9 @@ function App() {
     });
   }
 
-  function handleAddNewVoicing(progressionId: string) {
+  function handleAddChordWithVoicing(progressionId: string, name: string, notes: string[], voicing: ChordVoicing) {
     if (!currentSongId) return;
-    const newChord = { name: 'New Voicing', notes: [] as string[], voicing: undefined };
+    const newChord = { name, notes, voicing };
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
         if (song.id === currentSongId) {
@@ -628,7 +628,7 @@ function App() {
       <div className="sticky-header">
         {/* Brand row */}
         <header className="sticky-header__brand">
-          <div className="app-container flex items-center justify-between py-3">
+          <div className="app-container flex items-center justify-between py-5">
             <h1
               className="text-xl font-bold cursor-pointer transition-colors"
               style={{ fontFamily: 'var(--font-body)', color: 'var(--text)', letterSpacing: '-0.02em' }}
@@ -731,7 +731,7 @@ function App() {
               onChordRemove={handleChordRemove}
               onUpdateChordVoicing={handleUpdateChordVoicing}
               onAddChord={handleAddChord}
-              onAddNewVoicing={handleAddNewVoicing}
+              onAddChordWithVoicing={handleAddChordWithVoicing}
               onUpdateChordBeats={handleUpdateChordBeats}
               onAddProgression={() => handleAddProgression(currentSongId!)}
               onCreatePairing={handleCreatePairing}

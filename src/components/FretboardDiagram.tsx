@@ -1,4 +1,4 @@
-import { getFretsForNoteOnString } from "../lib/fretUtils";
+import { getFretsForNoteOnString, normalizeNote } from "../lib/fretUtils";
 import { getFretPositions, getFretCenterPosition } from "../lib/fretPositions";
 import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable, applyCapo } from "../lib/tunings";
 import FretMarker from "./FretMarker";
@@ -20,6 +20,9 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
     const strings = getTuningStrings(effectiveTuning);
     const fretPositions = getFretPositions();
 
+    // Root note is the first note in the chord (normalized for comparison)
+    const rootNote = chordNotes.length > 0 ? normalizeNote(chordNotes[0]) : null;
+
     // Build sets for voicing highlight lookup: exact position and octave (+12)
     const voicingSet = new Set<string>();
     const octaveVoicingSet = new Set<string>();
@@ -35,11 +38,11 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
         });
     }
     return (
-        <div className="mt-3 p-2 sm:p-3 bg-gray-100 rounded-lg border border-gray-200">
-            <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-800">
+        <div className="mt-3 p-2 sm:p-3 rounded-lg" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+            <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3" style={{ color: 'var(--text)' }}>
                 Fretboard
                 {capoSettings.enabled && capoSettings.fret > 0 && (
-                    <span className="text-xs sm:text-sm font-normal text-gray-600 ml-2">
+                    <span className="text-xs sm:text-sm font-normal ml-2" style={{ color: 'var(--text-secondary)' }}>
                         (Capo on fret {capoSettings.fret})
                     </span>
                 )}
@@ -70,35 +73,37 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                     return (
                         <div key={stringIndex} className="flex items-center">
                             {/* String label */}
-                            <div className="w-6 sm:w-8 text-xs sm:text-sm font-medium text-gray-700">
+                            <div className="w-6 sm:w-8 text-xs sm:text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
                                 {stringRoot}
                             </div>
 
                             {/* String line with fret markers */}
                             <div className="relative flex-1 h-4 sm:h-5 mx-1 sm:mx-2 flex items-center">
                                 {/* String line */}
-                                <div className="absolute left-0 right-0 h-1 bg-gray-600 top-1/2 transform -translate-y-1/2"></div>
+                                <div className="absolute left-0 right-0 h-1 top-1/2 transform -translate-y-1/2" style={{ background: 'var(--fret-string)' }}></div>
 
                                 {/* Fret position lines */}
                                 {fretPositions.map((position, fret) => (
                                     <div
                                         key={fret}
-                                        className={`absolute top-0 bottom-0 w-px ${
-                                            capoSettings.enabled && fret === capoSettings.fret
-                                                ? 'bg-amber-500 w-1'
+                                        className="absolute top-0 bottom-0"
+                                        style={{
+                                            left: `${position}%`,
+                                            width: capoSettings.enabled && fret === capoSettings.fret ? 3 : 1,
+                                            background: capoSettings.enabled && fret === capoSettings.fret
+                                                ? 'var(--glow)'
                                                 : !isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0)
-                                                ? 'bg-gray-300'
-                                                : 'bg-gray-400'
-                                        }`}
-                                        style={{ left: `${position}%` }}
+                                                ? 'var(--fret-divider-muted)'
+                                                : 'var(--fret-divider)',
+                                        }}
                                     />
                                 ))}
 
                                 {/* Capo bar */}
                                 {capoSettings.enabled && capoSettings.fret > 0 && (
                                     <div
-                                        className="absolute top-1 bottom-1 w-1 bg-amber-500 rounded"
-                                        style={{ left: `${fretPositions[capoSettings.fret]}%` }}
+                                        className="absolute top-1 bottom-1 rounded"
+                                        style={{ left: `${fretPositions[capoSettings.fret]}%`, width: 3, background: 'var(--glow)', boxShadow: '0 0 6px var(--glow-subtle)' }}
                                     />
                                 )}
 
@@ -118,6 +123,7 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                             isOverlap={chordNoteSet?.has(marker.note)}
                                             isVoicing={voicingSet.has(key)}
                                             isOctaveVoicing={octaveVoicingSet.has(key)}
+                                            isRoot={rootNote !== null && normalizeNote(marker.note) === rootNote}
                                         />
                                     );
                                 })}
@@ -138,7 +144,7 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
 
                                 {/* Preview/next-chord note markers (faded) */}
                                 {previewNotes && previewNotes
-                                    .filter(n => !chordNotes.includes(n))
+                                    .filter(n => !chordNotes.some(cn => normalizeNote(cn) === normalizeNote(n)))
                                     .flatMap((note) =>
                                         getFretsForNoteOnString(stringRoot, note)
                                             .filter(fret => fret <= 24)
@@ -153,8 +159,8 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                                 left: `${getFretCenterPosition(marker.fret)}%`,
                                                 transform: 'translateX(-50%) translateY(-50%)',
                                                 top: '50%',
-                                                background: 'var(--accent)',
-                                                borderColor: 'var(--accent)',
+                                                background: 'var(--glow)',
+                                                borderColor: 'var(--glow)',
                                                 color: '#fff',
                                                 opacity: 0.3,
                                                 pointerEvents: 'none',
@@ -168,7 +174,7 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                             </div>
 
                             {/* Fret numbers for reference */}
-                            <div className="w-12 sm:w-20 text-xs text-gray-500">
+                            <div className="w-12 sm:w-20 text-xs" style={{ color: 'var(--text-muted)' }}>
                                 {allMarkerCount > 0 ? `${allMarkerCount} note${allMarkerCount !== 1 ? 's' : ''}` : 'X'}
                             </div>
                         </div>
@@ -189,20 +195,27 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                 : (fretPositions[fret - 1] + position) / 2;
                             
                             return (
-                                <div 
+                                <div
                                     key={fret}
                                     className={`absolute text-xs transform -translate-x-1/2 ${
                                         !isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0)
-                                            ? 'text-gray-300 line-through'
+                                            ? 'line-through'
                                             : capoSettings.enabled && fret === capoSettings.fret
-                                            ? 'text-amber-600 font-bold'
-                                            : 'text-gray-500'
+                                            ? 'font-bold'
+                                            : ''
                                     }`}
-                                    style={{ left: `${labelPosition}%` }}
+                                    style={{
+                                        left: `${labelPosition}%`,
+                                        color: !isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0)
+                                            ? 'var(--fret-divider-muted)'
+                                            : capoSettings.enabled && fret === capoSettings.fret
+                                            ? 'var(--glow)'
+                                            : 'var(--text-muted)',
+                                    }}
                                 >
                                     {fret}
                                     {capoSettings.enabled && fret === capoSettings.fret && (
-                                        <div className="text-xs text-amber-600">C</div>
+                                        <div className="text-xs" style={{ color: 'var(--glow)' }}>C</div>
                                     )}
                                 </div>
                             );

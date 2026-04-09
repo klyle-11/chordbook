@@ -10,7 +10,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import SortableChordGrid from './SortableChordGrid';
 import { EditableText } from './EditableText';
-import ChordForm from './ChordForm';
+import { AddChordPanel } from './AddChordPanel';
 import { PairedProgressionPanel } from './PairedProgressionPanel';
 import LeadSelector from './LeadSelector';
 import LeadEditor from './LeadEditor';
@@ -24,13 +24,14 @@ interface SortableProgressionItemProps {
   onChordRemove: (progressionId: string, chordIndex: number) => void;
   onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
-  onAddNewVoicing: (progressionId: string) => void;
+  onAddChordWithVoicing: (progressionId: string, name: string, notes: string[], voicing: ChordVoicing) => void;
   tuning: Tuning;
   capoSettings: CapoSettings;
   bpm: number;
   beatsPerMeasure: number;
   isNewlyCreated?: boolean;
   activeLeadNotes?: string[];
+  nextProgressionFirstChord?: import('../types/chord').Chord;
 }
 
 function SortableProgressionItem({
@@ -42,15 +43,17 @@ function SortableProgressionItem({
   onChordRemove,
   onUpdateChordVoicing,
   onAddChord,
-  onAddNewVoicing,
+  onAddChordWithVoicing,
   tuning,
   capoSettings,
   bpm,
   beatsPerMeasure,
   isNewlyCreated = false,
-  activeLeadNotes
+  activeLeadNotes,
+  nextProgressionFirstChord
 }: SortableProgressionItemProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showAddChord, setShowAddChord] = useState(false);
 
   const {
     attributes,
@@ -132,29 +135,38 @@ function SortableProgressionItem({
 
       {/* Chord Diagrams + Add Form */}
       <div className="px-3 pb-3">
-        {/* Chord Form for adding chords */}
-        <div className="mb-3">
-          <div className="flex items-start gap-2">
-            <div className="flex-1">
-              <ChordForm onAddChord={(chordName) => onAddChord(progression.id, chordName)} />
-            </div>
+        {/* Add Chord toggle */}
+        {!showAddChord ? (
+          <div className="mb-3">
             <button
-              onClick={() => onAddNewVoicing(progression.id)}
-              className="mt-0 px-2 py-1.5 text-xs rounded transition-colors flex items-center gap-1 whitespace-nowrap"
+              onClick={() => setShowAddChord(true)}
+              className="text-sm font-medium rounded px-2 py-1 transition-colors"
               style={{
-                background: 'var(--bg-secondary)',
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--border)',
+                color: 'var(--accent)',
+                background: 'transparent',
+                border: '1px solid var(--accent)',
+                cursor: 'pointer',
               }}
-              title="Add a new chord by entering frets directly in the TAB editor"
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--accent)';
+                e.currentTarget.style.color = '#fff';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'var(--accent)';
+              }}
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Voicing
+              + Add Chord
             </button>
           </div>
-        </div>
+        ) : (
+          <AddChordPanel
+            tuning={tuning}
+            onAddChord={async (chordName) => { await onAddChord(progression.id, chordName); setShowAddChord(false); }}
+            onAddVoicing={(name, notes, voicing) => { onAddChordWithVoicing(progression.id, name, notes, voicing); setShowAddChord(false); }}
+            onClose={() => setShowAddChord(false)}
+          />
+        )}
 
         {/* Chord Grid */}
         <SortableChordGrid
@@ -168,6 +180,7 @@ function SortableProgressionItem({
           activeLeadNotes={activeLeadNotes}
           bpm={progression.bpm || bpm}
           beatsPerMeasure={beatsPerMeasure}
+          nextProgressionFirstChord={nextProgressionFirstChord}
         />
       </div>
     </div>
@@ -212,7 +225,7 @@ interface SongProgressionsProps {
   onChordRemove: (progressionId: string, chordIndex: number) => void;
   onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
-  onAddNewVoicing: (progressionId: string) => void;
+  onAddChordWithVoicing: (progressionId: string, name: string, notes: string[], voicing: ChordVoicing) => void;
   onUpdateChordBeats: (progressionId: string, chordIndex: number, beats: number) => void;
   onAddProgression?: () => void;
   onCreatePairing: (name: string, progressionIds: string[]) => string | null;
@@ -247,7 +260,7 @@ export default function SongProgressions({
   onChordRemove,
   onUpdateChordVoicing,
   onAddChord,
-  onAddNewVoicing,
+  onAddChordWithVoicing,
   onUpdateChordBeats,
   onAddProgression,
   onCreatePairing,
@@ -545,7 +558,7 @@ export default function SongProgressions({
           items={progressions.map(p => p.id)}
           strategy={verticalListSortingStrategy}
         >
-          {progressions.map((progression) => (
+          {progressions.map((progression, progIdx) => (
             <div key={progression.id} className="relative">
               {pairingMode && (
                 <div
@@ -585,13 +598,18 @@ export default function SongProgressions({
                 onChordRemove={onChordRemove}
                 onUpdateChordVoicing={onUpdateChordVoicing}
                 onAddChord={onAddChord}
-                onAddNewVoicing={onAddNewVoicing}
+                onAddChordWithVoicing={onAddChordWithVoicing}
                 tuning={tuning}
                 capoSettings={capoSettings}
                 bpm={bpm}
                 beatsPerMeasure={timeSignature.beatsPerMeasure}
                 isNewlyCreated={newlyCreatedProgression === progression.id}
                 activeLeadNotes={activeLeadNotes}
+                nextProgressionFirstChord={
+                  progIdx < progressions.length - 1 && progressions[progIdx + 1].chords.length > 0
+                    ? progressions[progIdx + 1].chords[0]
+                    : undefined
+                }
               />
             </div>
           ))}

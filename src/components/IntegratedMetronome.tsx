@@ -36,13 +36,16 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeS
   }, []);
 
   // Notify parent only for user-driven changes, not external syncs
+  const onTempoChangeRef = useRef(onTempoChange);
+  onTempoChangeRef.current = onTempoChange;
+
   useEffect(() => {
     if (isSyncingRef.current) {
       isSyncingRef.current = false;
       return;
     }
-    onTempoChange?.(bpm);
-  }, [bpm, onTempoChange]);
+    onTempoChangeRef.current?.(bpm);
+  }, [bpm]);
 
   // Sync from parent (song switch)
   useEffect(() => {

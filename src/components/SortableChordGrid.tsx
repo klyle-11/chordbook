@@ -21,6 +21,7 @@ import DraggableChordCard from './DraggableChordCard';
 import FretboardDiagram from './FretboardDiagram';
 import ChordVoicingEditor, { type ChordVoicingEditorRef } from './ChordVoicingEditor';
 import { calculateChordFingering } from './ChordDiagram';
+import { getNotesForChord, isValidChord } from '../lib/chordUtils';
 
 const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -61,6 +62,7 @@ interface SortableChordGridProps {
   activeLeadNotes?: string[];
   bpm: number;
   beatsPerMeasure: number;
+  nextProgressionFirstChord?: Chord;
 }
 
 export default function SortableChordGrid({
@@ -74,10 +76,12 @@ export default function SortableChordGrid({
   activeLeadNotes,
   bpm,
   beatsPerMeasure,
+  nextProgressionFirstChord,
 }: SortableChordGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [showVoicingEditor, setShowVoicingEditor] = useState(false);
   const [showNextChord, setShowNextChord] = useState(true);
+  const [anticipateNextProgression, setAnticipateNextProgression] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voicingEditorRef = useRef<ChordVoicingEditorRef>(null);
@@ -186,9 +190,19 @@ export default function SortableChordGrid({
 
   const items = progression.map((_, index) => `chord-${index}`);
   const selectedChord = selectedIndex !== null ? progression[selectedIndex] : null;
-  const nextChord = selectedIndex !== null && selectedIndex < progression.length - 1
-    ? progression[selectedIndex + 1]
+  const isLastChord = selectedIndex !== null && selectedIndex === progression.length - 1;
+
+  // Next chord within the progression (wraps to first chord on last)
+  const nextChordInProgression = selectedIndex !== null
+    ? (selectedIndex < progression.length - 1
+        ? progression[selectedIndex + 1]
+        : progression.length > 1 ? progression[0] : null)
     : null;
+
+  // When on the last chord and anticipating next progression, use that instead
+  const previewChord = isLastChord && anticipateNextProgression && nextProgressionFirstChord
+    ? nextProgressionFirstChord
+    : nextChordInProgression;
 
   // Get voicing frets: prefer explicit voicing, fall back to computed fingering
   function getVoicingFrets(chord: Chord): (number | null)[] | undefined {
@@ -200,6 +214,15 @@ export default function SortableChordGrid({
       return fingering.positions.map(p => typeof p.fret === 'number' ? p.fret : null);
     }
     return undefined;
+  }
+
+  // Full theoretical notes for the chord (even if voicing is a shell voicing with fewer notes)
+  function getFullChordNotes(chord: Chord): string[] {
+    if (isValidChord(chord.name)) {
+      const fullNotes = getNotesForChord(chord.name);
+      if (fullNotes.length > 0) return fullNotes;
+    }
+    return chord.notes;
   }
 
   return (
@@ -262,7 +285,7 @@ export default function SortableChordGrid({
                 {selectedChord.name}
               </span>
               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                {selectedChord.notes.join(', ')}
+                {getFullChordNotes(selectedChord).join(', ')}
               </span>
               {isPlaying && (
                 <span className="text-xs" style={{ color: 'var(--accent)' }}>
@@ -272,7 +295,7 @@ export default function SortableChordGrid({
             </div>
             <div className="flex items-center gap-2">
               {/* Show next chord toggle */}
-              {nextChord && (
+              {previewChord && (
                 <button
                   onClick={() => setShowNextChord(!showNextChord)}
                   className="flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors"
@@ -281,12 +304,34 @@ export default function SortableChordGrid({
                     color: showNextChord ? '#fff' : 'var(--text-muted)',
                     border: '1px solid var(--border)',
                   }}
-                  title={`${showNextChord ? 'Hide' : 'Show'} next chord (${nextChord.name}) on fretboard`}
+                  title={`${showNextChord ? 'Hide' : 'Show'} next chord (${previewChord.name}) on fretboard`}
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M13 17l5-5-5-5M6 17l5-5-5-5" />
                   </svg>
-                  {nextChord.name}
+                  {previewChord.name}
+                </button>
+              )}
+              {/* Cross-progression anticipation toggle (only on last chord when next progression exists) */}
+              {isLastChord && nextProgressionFirstChord && (
+                <button
+                  onClick={() => setAnticipateNextProgression(!anticipateNextProgression)}
+                  className="flex items-center justify-center rounded transition-colors"
+                  style={{
+                    width: 20,
+                    height: 20,
+                    background: anticipateNextProgression ? 'var(--accent)' : 'transparent',
+                    color: anticipateNextProgression ? '#fff' : 'var(--text-muted)',
+                    border: '1px solid var(--border)',
+                  }}
+                  title={anticipateNextProgression
+                    ? `Previewing next progression's first chord (${nextProgressionFirstChord.name})`
+                    : `Preview next progression's first chord (${nextProgressionFirstChord.name})`}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 17l5-5-5-5" />
+                    <path d="M13 17l5-5-5-5" />
+                  </svg>
                 </button>
               )}
               {/* TAB editor toggle */}
@@ -323,12 +368,12 @@ export default function SortableChordGrid({
             )}
             <div className="overflow-x-auto">
               <FretboardDiagram
-                chordNotes={selectedChord.notes}
+                chordNotes={getFullChordNotes(selectedChord)}
                 tuning={tuning}
                 capoSettings={capoSettings}
                 onFretClick={handleFretClick}
                 activeLeadNotes={activeLeadNotes}
-                previewNotes={showNextChord && nextChord ? nextChord.notes : undefined}
+                previewNotes={showNextChord && previewChord ? previewChord.notes : undefined}
                 voicingFrets={getVoicingFrets(selectedChord)}
               />
             </div>

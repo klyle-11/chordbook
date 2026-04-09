@@ -35,6 +35,15 @@
   --card-text-muted: #b8a48c;
   --lead: #7c8cf8;
   --lead-subtle: rgba(124,140,248,0.18);
+  --glow: #6366f1;
+  --glow-subtle: rgba(99,102,241,0.25);
+  --fret-marker: #d4a050;
+  --fret-marker-border: #b07828;
+  --fret-marker-open: #d4a050;
+  --fret-marker-open-border: #b07828;
+  --fret-string: #9a8a6a;
+  --fret-divider: #d4c4a8;
+  --fret-divider-muted: #e8dcc8;
 }
 
 html {
@@ -500,7 +509,8 @@ input[type="range"]:focus::-webkit-slider-thumb {
 }
 
 .playback-strip__beat-dot[data-playing="true"] {
-  background: var(--accent);
+  background: var(--glow);
+  box-shadow: 0 0 4px var(--glow-subtle);
   animation: beatPulse 0.6s ease-in-out infinite;
 }
 
@@ -965,10 +975,10 @@ input[type="range"]:focus::-webkit-slider-thumb {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--accent);
+  background: var(--glow);
   z-index: 10;
   transition: none;
-  box-shadow: 0 0 4px var(--accent);
+  box-shadow: 0 0 6px var(--glow), 0 0 12px var(--glow-subtle);
 }
 
 /* Beat Popover */

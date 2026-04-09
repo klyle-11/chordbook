@@ -31,6 +31,15 @@ export interface Theme {
     cardTextMuted: string;
     lead: string;
     leadSubtle: string;
+    glow: string;
+    glowSubtle: string;
+    fretMarker: string;
+    fretMarkerBorder: string;
+    fretMarkerOpen: string;
+    fretMarkerOpenBorder: string;
+    fretString: string;
+    fretDivider: string;
+    fretDividerMuted: string;
   };
 }
 
@@ -66,6 +75,15 @@ export const themes: Theme[] = [
       cardTextMuted: '#b8a48c',
       lead: '#7c8cf8',
       leadSubtle: 'rgba(124,140,248,0.18)',
+      glow: '#6366f1',
+      glowSubtle: 'rgba(99,102,241,0.25)',
+      fretMarker: '#d4a050',
+      fretMarkerBorder: '#b07828',
+      fretMarkerOpen: '#d4a050',
+      fretMarkerOpenBorder: '#b07828',
+      fretString: '#9a8a6a',
+      fretDivider: '#d4c4a8',
+      fretDividerMuted: '#e8dcc8',
     },
   },
   {
@@ -99,6 +117,15 @@ export const themes: Theme[] = [
       cardTextMuted: '#636363',
       lead: '#86efac',
       leadSubtle: 'rgba(134,239,172,0.18)',
+      glow: '#60a5fa',
+      glowSubtle: 'rgba(96,165,250,0.3)',
+      fretMarker: '#e0a830',
+      fretMarkerBorder: '#c08010',
+      fretMarkerOpen: '#e0a830',
+      fretMarkerOpenBorder: '#c08010',
+      fretString: '#737373',
+      fretDivider: '#525252',
+      fretDividerMuted: '#404040',
     },
   },
   {
@@ -132,6 +159,15 @@ export const themes: Theme[] = [
       cardTextMuted: '#8b82b0',
       lead: '#86efac',
       leadSubtle: 'rgba(134,239,172,0.18)',
+      glow: '#818cf8',
+      glowSubtle: 'rgba(129,140,248,0.3)',
+      fretMarker: '#c8a868',
+      fretMarkerBorder: '#a88848',
+      fretMarkerOpen: '#c8a868',
+      fretMarkerOpenBorder: '#a88848',
+      fretString: '#6e6494',
+      fretDivider: '#3e3568',
+      fretDividerMuted: '#2e2558',
     },
   },
   {
@@ -165,6 +201,15 @@ export const themes: Theme[] = [
       cardTextMuted: '#7d9a89',
       lead: '#b4a6f8',
       leadSubtle: 'rgba(180,166,248,0.18)',
+      glow: '#5eaa7d',
+      glowSubtle: 'rgba(94,170,125,0.3)',
+      fretMarker: '#b8a060',
+      fretMarkerBorder: '#988040',
+      fretMarkerOpen: '#b8a060',
+      fretMarkerOpenBorder: '#988040',
+      fretString: '#5e8a6e',
+      fretDivider: '#3a5c48',
+      fretDividerMuted: '#264a38',
     },
   },
   {
@@ -198,6 +243,15 @@ export const themes: Theme[] = [
       cardTextMuted: '#5e587a',
       lead: '#86efac',
       leadSubtle: 'rgba(134,239,172,0.18)',
+      glow: '#a78bfa',
+      glowSubtle: 'rgba(167,139,250,0.3)',
+      fretMarker: '#b8b0d8',
+      fretMarkerBorder: '#9890b8',
+      fretMarkerOpen: '#b8b0d8',
+      fretMarkerOpenBorder: '#9890b8',
+      fretString: '#5e587a',
+      fretDivider: '#4a4466',
+      fretDividerMuted: '#332e48',
     },
   },
 ];

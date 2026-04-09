@@ -1,5 +1,13 @@
 import type { Tuning } from './tunings';
 
+const FLAT_TO_SHARP: Record<string, string> = {
+    'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B',
+};
+
+export function normalizeNote(n: string): string {
+    return FLAT_TO_SHARP[n] || n;
+}
+
 /**
  * Given a tuning and a fret-per-string array, return the sounding note names.
  * Skips null (muted) strings.
@@ -26,8 +34,10 @@ export function getNotesFromVoicing(tuning: Tuning, frets: (number | null)[]): s
  */
 export function getFretsForNoteOnString(stringRoot: string, targetNote: string): number[] {
     const chromatic = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-    const rootIndex = chromatic.indexOf(stringRoot);
-    const targetIndex = chromatic.indexOf(targetNote);
+    const normalizedRoot = normalizeNote(stringRoot);
+    const normalizedTarget = normalizeNote(targetNote);
+    const rootIndex = chromatic.indexOf(normalizedRoot);
+    const targetIndex = chromatic.indexOf(normalizedTarget);
     const frets: number[] = [];
 
     if (rootIndex === -1 || targetIndex === -1) {
@@ -36,7 +46,7 @@ export function getFretsForNoteOnString(stringRoot: string, targetNote: string):
 
     for (let i = 0; i <= 24; i++) {
         const currentNote = chromatic[(rootIndex + i) % 12];
-        if (currentNote === targetNote) {
+        if (currentNote === normalizedTarget) {
             frets.push(i);
         }
     }

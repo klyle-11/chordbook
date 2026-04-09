@@ -295,29 +295,20 @@ export interface ChordFormRef {
                 />
                 <button
                     type="submit"
-                    className="text-sm font-medium transition-colors"
+                    className="text-sm font-medium rounded px-2 py-1 transition-colors whitespace-nowrap"
                     style={{
                       color: 'var(--accent)',
-                      background: 'none',
-                      border: 'none',
-                      borderBottom: '1.5px solid var(--accent)',
-                      padding: '2px 0',
+                      background: 'transparent',
+                      border: '1px solid var(--accent)',
                       cursor: 'pointer',
-                      whiteSpace: 'nowrap',
                     }}
                     onMouseEnter={e => {
                       e.currentTarget.style.background = 'var(--accent)';
                       e.currentTarget.style.color = '#fff';
-                      e.currentTarget.style.padding = '2px 8px';
-                      e.currentTarget.style.borderRadius = '4px';
-                      e.currentTarget.style.borderBottom = '1.5px solid transparent';
                     }}
                     onMouseLeave={e => {
-                      e.currentTarget.style.background = 'none';
+                      e.currentTarget.style.background = 'transparent';
                       e.currentTarget.style.color = 'var(--accent)';
-                      e.currentTarget.style.padding = '2px 0';
-                      e.currentTarget.style.borderRadius = '0';
-                      e.currentTarget.style.borderBottom = '1.5px solid var(--accent)';
                     }}
                 >
                     {getButtonText()}
