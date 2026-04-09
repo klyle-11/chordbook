@@ -90,6 +90,14 @@ leads: 'id, name, tuningId, updatedAt'
 
 ## Feature Plan
 
+### Design Principle: Fully Optional Layer
+
+Harmonic analysis is an **additive overlay** — the app must feel complete without it. Everything works whether analysis is on or off: progressions, chord editing, leads, export, pairing. When toggled off, zero analysis code runs and zero analysis UI renders.
+
+- **Not coupled to leads**: The lead system is user-driven creative input. Harmonic analysis is computed insight. They are independent features that may coexist visually but have no data dependencies on each other.
+- **No required state**: Analysis is derived on-the-fly from existing chord data via `useMemo`. It adds no required fields to `Song`, `Chord`, or `Lead` types.
+- **Clean toggle boundary**: `analysisEnabled` gates all analysis computation and rendering. Components receive `analysis?: ...` optional props and render nothing when absent.
+
 ### Analysis Engine — `src/lib/harmonicAnalysis.ts` (new)
 
 #### Data structures
@@ -178,7 +186,6 @@ analyzeChord(chordName, harmonicContext):
 - `detectKey(chords: Chord[]): HarmonicContext`
 - `analyzeChord(chordName: string, context: HarmonicContext): ChordAnalysis`
 - `getCircleOfFifths(): string[]` — static ordered array of all 12 keys
-- `classifyLeadNote(note: string, chordAnalysis: ChordAnalysis, context: HarmonicContext): NoteClassification`
 
 ---
 
@@ -196,6 +203,16 @@ Add `analysis` and `analysisSubtle` to `Theme.colors` interface. Applied as `--a
 
 Add defaults to `:root` in `src/index.css`.
 
+#### Harmonic function color coding (used on circle slices, note pills, chord badges)
+
+| Function              | Color  | Meaning               |
+|-----------------------|--------|-----------------------|
+| **Tonic** (Home)      | Blue   | Stability, rest       |
+| **Subdominant** (Away)| Green  | Movement, departure   |
+| **Dominant** (Tension)| Red    | Tension, needs resolution |
+
+These map to CSS vars `--fn-tonic`, `--fn-subdominant`, `--fn-dominant` per theme. Used to color circle slices, Roman numeral badges, and note pills based on their harmonic role.
+
 ---
 
 ### New Components
@@ -212,15 +229,31 @@ Replaces/augments `SongScale` section when analysis is enabled. Shows:
   - Diatonic chords highlighted with `var(--analysis-subtle)`
   - Active chord gets a ring indicator
   - Fifth neighbors connected with lines
+  - **Heat map mode**: Slices adjacent to current key glow brightest (safe transitions), distant slices glow dimly (adventurous/modal). Helps suggest pivot chords for bridging to neighboring keys.
+  - **Concentric rings**: Inner ring = current key diatonic chords, outer ring = parallel minor diatonic chords. Highlights where borrowed chords (bVI, bVII, iv) diverge from the major ring.
+  - **Diameter line**: For any dominant 7th chord, draw a line through center to its tritone sub (e.g., G7 ↔ Db7). Simple geometry makes jazz substitutions intuitive.
+  - **Path trace**: Trace the progression's movement around the circle. Clockwise = tension/lifting, counter-clockwise = resolution/homecoming. Flag jumpy paths as "High Complexity" and tight clusters as "Harmonically Stable."
 - **Progression movement**: Harmonic movement as arrows (e.g., ii → V → I)
 
 Circle of fifths SVG: 12 circles in a ring via trigonometry (`cx = center + r * cos(angle)`). Order: C, G, D, A, E, B, F#/Gb, Db, Ab, Eb, Bb, F.
+
+**Tooltips & flyouts on the circle:**
+Every visual indicator on the circle should have a brief explanation on hover/tap so users learn *why* something is highlighted, not just *that* it is.
+
+| Visual element             | Tooltip content                                                                                          |
+|----------------------------|----------------------------------------------------------------------------------------------------------|
+| Heat map glow (bright)     | "G Major shares 6 of 7 notes with C Major — smooth key change"                                          |
+| Heat map glow (dim)        | "F# Major shares only 2 notes with C Major — distant, dramatic shift"                                   |
+| Concentric outer ring chord| "Fm is borrowed from C Minor — adds a darker color without leaving the key"                              |
+| Diameter line              | "Db7 is the tritone sub of G7 — they share the same tension notes (B and F), so one can replace the other" |
+| Path trace arrow (CW)      | "Moving up a fifth (C → G) builds tension — pulls away from home"                                       |
+| Path trace arrow (CCW)     | "Moving down a fifth (G → C) resolves — the strongest pull back home"                                   |
+| Neighbor key highlight     | "F Major is one step left on the circle — a natural bridge destination"                                  |
 
 ```typescript
 interface HarmonicAnalysisPanelProps {
   analysis: ProgressionAnalysis | null;
   activeChordIndex?: number;
-  activeLeadNotes?: string[];
 }
 ```
 
@@ -231,15 +264,30 @@ Rendered inside `DraggableChordCard` when analysis is enabled. Compact by defaul
 - **Header**: Roman numeral + function badge (e.g., `ii7 · Subdominant`)
 - **Expanded detail**:
   - Chord tones labeled as root/3rd/5th/7th with colored dots
-  - Available extensions: pills for 9, 11, 13, sus2, sus4
+  - Available extensions: pills for 9, 11, 13, sus2, sus4 — with "Aura" interaction: glowing extension slices on the circle can be tapped to instantly add the note to the chord voicing
   - Substitutions: chord name pills
-  - Tension map: lead notes classified against this chord (when lead active)
+  - **Ghost circle**: When editing a chord, show a faint Circle of Fifths in the background. As the user explores, show the relationship of the hovered note to the root key.
+
+**Tooltips & flyouts on chord analysis items:**
+Each suggestion pill/badge in the overlay should explain itself via tooltip so the user builds intuition over time.
+
+| Element                    | Tooltip content                                                                                     |
+|----------------------------|-----------------------------------------------------------------------------------------------------|
+| Roman numeral badge        | "ii means this is the 2nd degree of C Major — it naturally wants to move to V (G)"                  |
+| Function label (Tonic)     | "Tonic chords feel like home — stable resting points"                                               |
+| Function label (Dominant)  | "Dominant chords create tension — they pull strongly toward the tonic"                               |
+| Function label (Subdominant)| "Subdominant chords move away from home — set up the dominant or return to tonic"                   |
+| Extension pill (e.g. "9th")| "D is 2 steps clockwise from C on the circle of fifths — close enough to blend, far enough to add color" |
+| Substitution pill          | "Fmaj7 shares 3 notes with Dm7 — can replace it for a brighter sound"                              |
+| Tritone sub pill           | "Db7 sits directly opposite G7 on the circle — same tension, chromatic approach to C"               |
+| Borrowed chord pill        | "Fm is from C Minor — borrowing it adds a bittersweet quality"                                      |
+
+Flyout behavior: Tooltips appear on hover (desktop) or long-press (mobile). Keep text under 20 words. Use the actual key/chord names from the current context rather than generic placeholders.
 
 ```typescript
 interface ChordAnalysisOverlayProps {
   analysis: ChordAnalysis;
   context: HarmonicContext;
-  activeLeadNotes?: string[];
 }
 ```
 
@@ -326,10 +374,10 @@ App.tsx (analysisEnabled, progressionAnalysis)
 11. Replace `SongScale` when analysis enabled
 12. Key detection, scale display, progression movement
 
-**Phase 5: Lead integration + polish**
-13. Lead note classification against harmonic context
-14. Tension display in `ChordAnalysisOverlay` when lead active
-15. Edge cases: no chords, single chord, ambiguous keys
+**Phase 5: Polish + edge cases**
+13. Edge cases: no chords, single chord, ambiguous keys
+14. Verify clean toggle: analysis off → zero analysis UI, zero perf cost
+15. Verify independence from lead system — both features work fully alone
 
 ---
 
@@ -357,7 +405,8 @@ App.tsx (analysisEnabled, progressionAnalysis)
 2. Each chord card shows Roman numeral and function label
 3. Expand chord analysis — extensions, substitutions, note classifications visible
 4. Circle of fifths highlights current key and diatonic chords
-5. Activate a lead — lead notes classified as chord tone/tension/passing
-6. Toggle off — all analysis UI disappears cleanly
+5. Tooltips appear on hover for every indicator (circle highlights, pills, badges) explaining the "why"
+6. Toggle off — all analysis UI disappears cleanly, no leftover artifacts
 7. Switch themes — analysis colors adapt
 8. Reload — toggle state persists
+9. Lead system works independently — no behavior change with analysis on or off
