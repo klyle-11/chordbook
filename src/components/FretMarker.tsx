@@ -11,9 +11,11 @@ interface FretMarkerProps {
     onFretClick?: (stringIndex: number, fret: number, note: string) => void;
     isLeadNote?: boolean;
     isOverlap?: boolean;
+    isVoicing?: boolean;
+    isOctaveVoicing?: boolean;
 }
 
-export default function FretMarker({ fret, note, guitarString, stringIndex, tuning, onFretClick, isLeadNote, isOverlap }: FretMarkerProps) {
+export default function FretMarker({ fret, note, guitarString, stringIndex, tuning, onFretClick, isLeadNote, isOverlap, isVoicing, isOctaveVoicing }: FretMarkerProps) {
     const isOpenNote = fret === 0;
     const isLeadOnly = isLeadNote && !isOverlap;
 
@@ -36,6 +38,12 @@ export default function FretMarker({ fret, note, guitarString, stringIndex, tuni
         ? { boxShadow: '0 0 0 3px var(--lead)' }
         : {};
 
+    const voicingStyle: React.CSSProperties = isVoicing
+        ? { boxShadow: '0 0 0 3px var(--accent), 0 0 8px var(--accent)', zIndex: 20 }
+        : isOctaveVoicing
+        ? { opacity: 0.45, boxShadow: '0 0 0 2px var(--accent)', zIndex: 15 }
+        : {};
+
     return (
         <div
             className={`absolute w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold border-2 cursor-pointer group z-10 transition-transform hover:scale-110 ${baseClass}`}
@@ -45,6 +53,7 @@ export default function FretMarker({ fret, note, guitarString, stringIndex, tuni
                 top: '50%',
                 ...leadStyle,
                 ...overlapStyle,
+                ...voicingStyle,
             }}
             title={`Click to play ${note}${isLeadNote ? ' (in lead)' : ''}`}
             onClick={handleClick}

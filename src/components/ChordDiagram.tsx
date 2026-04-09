@@ -3,6 +3,7 @@ import { Chord } from '@tonaljs/tonal';
 import type { Tuning } from '../lib/tunings';
 import type { ChordVoicing } from '../types/chord';
 import { getTuningStrings, getTuningData } from '../lib/tunings';
+import { audioPlayer } from '../lib/audioPlayer';
 
 const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -113,7 +114,7 @@ function assignFingerNumbers(positions: ChordPosition[]): ChordPosition[] {
   return result;
 }
 
-function calculateChordFingering(chordName: string, tuning: Tuning): { positions: ChordPosition[]; startFret: number; capo?: number } | null {
+export function calculateChordFingering(chordName: string, tuning: Tuning): { positions: ChordPosition[]; startFret: number; capo?: number } | null {
   const chord = Chord.get(chordName);
   if (!chord.notes || chord.notes.length === 0) return null;
 
@@ -260,23 +261,88 @@ function DotView({ chordName, tuning, activeLeadNotes }: { chordName: string; tu
   );
 }
 
+// ─── Play chord (strum all notes low-to-high) ───
+
+function playChordFromFrets(frets: (number | 'x' | null)[], tuning: Tuning) {
+  const strings = getTuningStrings(tuning);
+  const strumDelay = audioPlayer.getStrumDelay();
+
+  // Strum from lowest string (last index) to highest (first index)
+  const entries: { stringIndex: number; fret: number }[] = [];
+  for (let i = frets.length - 1; i >= 0; i--) {
+    const f = frets[i];
+    if (f !== null && f !== 'x' && typeof f === 'number') {
+      entries.push({ stringIndex: i, fret: f });
+    }
+  }
+
+  entries.forEach(({ stringIndex, fret }, i) => {
+    const note = getNoteAtFret(strings[stringIndex], fret);
+    setTimeout(() => {
+      audioPlayer.playNote(note, 1.5, strings[stringIndex], fret, stringIndex, tuning);
+    }, i * strumDelay);
+  });
+}
+
+function PlayButton({ onClick }: { onClick: () => void }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsPlaying(true);
+    onClick();
+    setTimeout(() => setIsPlaying(false), 400);
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      title="Play chord"
+      className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center rounded-full transition-all opacity-50 hover:opacity-100"
+      style={{
+        background: isPlaying ? 'var(--accent)' : 'var(--bg-card)',
+        color: isPlaying ? '#fff' : 'var(--text-muted)',
+        border: '1px solid var(--border)',
+      }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        {isPlaying ? (
+          <>
+            <path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor" />
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+          </>
+        ) : (
+          <>
+            <path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor" />
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+          </>
+        )}
+      </svg>
+    </button>
+  );
+}
+
 // ─── Public component ───
 
 export function ChordDiagram({ chordName, tuning, voicing, onRequestVoicingEditor, activeLeadNotes }: ChordDiagramProps) {
   // TAB view when voicing exists for this tuning
   if (voicing && voicing.tuningId === tuning.id) {
     return (
-      <div className="rounded-lg p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+      <div className="relative rounded-lg p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        <PlayButton onClick={() => playChordFromFrets(voicing.frets, tuning)} />
         <TabView voicing={voicing} tuning={tuning} chordName={chordName} activeLeadNotes={activeLeadNotes} />
       </div>
     );
   }
 
   // Dot view when a computed fingering is available
-  const hasFingering = calculateChordFingering(chordName, tuning) !== null;
-  if (hasFingering) {
+  const fingering = calculateChordFingering(chordName, tuning);
+  if (fingering) {
+    const dotFrets = fingering.positions.map(p => p.fret);
     return (
-      <div className="rounded-lg p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+      <div className="relative rounded-lg p-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        <PlayButton onClick={() => playChordFromFrets(dotFrets, tuning)} />
         <DotView chordName={chordName} tuning={tuning} activeLeadNotes={activeLeadNotes} />
       </div>
     );

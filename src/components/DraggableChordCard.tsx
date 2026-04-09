@@ -1,49 +1,43 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Chord, ChordVoicing, SavedVoicing } from '../types/chord';
-import type { Tuning, CapoSettings } from '../lib/tunings';
+import type { Tuning } from '../lib/tunings';
 import { findVoicingsForNotes } from '../lib/savedVoicingLibrary';
-import FretboardDiagram from './FretboardDiagram';
 import { ChordDiagram } from './ChordDiagram';
-import ChordVoicingEditor, { type ChordVoicingEditorRef } from './ChordVoicingEditor';
 
 interface DraggableChordCardProps {
   chord: Chord;
   index: number;
   tuning: Tuning;
-  capoSettings: CapoSettings;
-  onReplace: (index: number) => void;
   onRemove: (index: number) => void;
   onUpdateVoicing?: (index: number, voicing: ChordVoicing | undefined) => void;
   activeLeadNotes?: string[];
+  isSelected?: boolean;
+  onSelect?: (index: number) => void;
 }
 
 export default function DraggableChordCard({
   chord,
   index,
   tuning,
-  capoSettings,
-  onReplace,
   onRemove,
   onUpdateVoicing,
   activeLeadNotes,
+  isSelected = false,
+  onSelect,
 }: DraggableChordCardProps) {
-  const isNewVoicing = chord.notes.length === 0;
-  const [showVoicingEditor, setShowVoicingEditor] = useState(isNewVoicing);
   const [savedVoicings, setSavedVoicings] = useState<SavedVoicing[]>([]);
   const [showVoicingPicker, setShowVoicingPicker] = useState(false);
-  const voicingEditorRef = useRef<ChordVoicingEditorRef>(null);
 
-  // Load saved voicings for this chord's notes + tuning
   useEffect(() => {
-    if (chord.notes.length === 0) return; // skip for new voicings with no notes yet
+    if (chord.notes.length === 0) return;
     let cancelled = false;
     findVoicingsForNotes(chord.notes, tuning.id).then(v => {
       if (!cancelled) setSavedVoicings(v);
     });
     return () => { cancelled = true; };
-  }, [chord.notes, tuning.id, showVoicingEditor]); // re-fetch after editor closes (may have saved new)
+  }, [chord.notes, tuning.id]);
 
   const {
     attributes,
@@ -59,12 +53,6 @@ export default function DraggableChordCard({
     transition,
   };
 
-  const handleFretClick = showVoicingEditor
-    ? (stringIndex: number, fret: number, _note: string) => {
-        voicingEditorRef.current?.setFretForString(stringIndex, fret);
-      }
-    : undefined;
-
   function selectVoicing(v: SavedVoicing) {
     if (onUpdateVoicing) {
       onUpdateVoicing(index, { frets: v.frets, tuningId: v.tuningId });
@@ -79,12 +67,10 @@ export default function DraggableChordCard({
     setShowVoicingPicker(false);
   }
 
-  // Format frets for display: e.g. "0 2 2 1 0 X"
   function fretLabel(frets: (number | null)[]): string {
     return frets.map(f => f === null ? 'X' : f).join(' ');
   }
 
-  // Check if a saved voicing matches the currently applied one
   function isActive(v: SavedVoicing): boolean {
     if (!chord.voicing || chord.voicing.tuningId !== tuning.id) return false;
     return v.frets.length === chord.voicing.frets.length &&
@@ -92,47 +78,45 @@ export default function DraggableChordCard({
   }
 
   return (
-    <div className="flex justify-start">
+    <div>
       <div
         ref={setNodeRef}
         style={{
           ...style,
           background: 'var(--bg-card)',
-          borderColor: isDragging ? 'var(--accent)' : 'var(--border)',
+          borderColor: isSelected ? 'var(--accent)' : isDragging ? 'var(--accent)' : 'var(--border)',
         }}
         {...attributes}
         data-chord-diagram
-        className={`w-full rounded-lg p-3 sm:p-4 transition-all duration-200 border-2 shadow-sm ${
-          isDragging
-            ? 'opacity-70 shadow-2xl z-50 scale-105'
-            : ''
-        }`}
+        className={`rounded-lg p-2 transition-all duration-200 border-2 shadow-sm cursor-pointer ${
+          isDragging ? 'opacity-70 shadow-2xl z-50 scale-105' : ''
+        } ${isSelected ? 'ring-1 ring-[var(--accent)]' : ''}`}
+        onClick={() => onSelect?.(index)}
       >
-      {/* Drag handle and chord info */}
-      <div className="flex items-center justify-between mb-2 sm:mb-1">
-        <h3 className="text-base sm:text-lg font-medium truncate min-w-0 flex-1 mr-2" style={{ color: 'var(--card-text)' }}>{chord.name}</h3>
-        <div className="flex gap-1 sm:gap-2 flex-shrink-0">
-          <button
-            onClick={() => setShowVoicingEditor(!showVoicingEditor)}
-            className="px-2 py-1 text-xs rounded transition-colors"
-            style={{
-              background: showVoicingEditor ? 'var(--accent)' : 'var(--bg-secondary)',
-              color: showVoicingEditor ? '#fff' : 'var(--text-secondary)',
-              border: '1px solid var(--border)',
-            }}
-            title="Edit voicing (frets per string)"
-          >
-            TAB
-          </button>
+      {/* Compact header: drag handle + action buttons */}
+      <div className="flex items-center justify-between mb-1">
+        <div
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+          title="Drag to reorder"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <svg className="w-3 h-3" viewBox="0 0 10 10" fill="currentColor">
+            <circle cx="3" cy="2" r="1" /><circle cx="7" cy="2" r="1" />
+            <circle cx="3" cy="5" r="1" /><circle cx="7" cy="5" r="1" />
+            <circle cx="3" cy="8" r="1" /><circle cx="7" cy="8" r="1" />
+          </svg>
+        </div>
+        <div className="flex gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {savedVoicings.length > 0 && (
             <div style={{ position: 'relative' }}>
               <button
                 onClick={() => setShowVoicingPicker(!showVoicingPicker)}
-                className="px-2 py-1 text-xs rounded transition-colors"
+                className="px-1 py-0.5 rounded transition-colors"
                 style={{
-                  background: showVoicingPicker ? 'var(--accent)' : 'var(--bg-secondary)',
-                  color: showVoicingPicker ? '#fff' : 'var(--text-secondary)',
-                  border: '1px solid var(--border)',
+                  background: showVoicingPicker ? 'var(--accent)' : 'transparent',
+                  color: showVoicingPicker ? '#fff' : 'var(--text-muted)',
+                  fontSize: '0.6rem',
                 }}
                 title={`${savedVoicings.length} saved voicing${savedVoicings.length !== 1 ? 's' : ''}`}
               >
@@ -187,81 +171,25 @@ export default function DraggableChordCard({
             </div>
           )}
           <button
-            onClick={() => onReplace(index)}
-            className="px-2 py-1 text-xs rounded transition-colors"
-            style={{ background: 'var(--accent)', color: '#fff' }}
-          >
-            Replace
-          </button>
-          <button
             onClick={() => onRemove(index)}
-            className="px-2 py-1 text-xs rounded transition-colors"
-            style={{ background: 'var(--danger)', color: '#fff' }}
+            className="px-1 py-0.5 rounded transition-colors"
+            style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}
+            title="Remove chord"
           >
             ×
           </button>
-          <div
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing px-2 py-1 text-xs rounded flex items-center transition-colors"
-            style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-            title="Drag to reorder"
-          >
-            ⋮⋮
-          </div>
         </div>
       </div>
 
-      <p className="text-xs sm:text-sm mb-2 text-center break-words" style={{ color: 'var(--text-secondary)' }}>
-        {isNewVoicing ? (
-          <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Enter frets below to define this voicing</span>
-        ) : (
-          <>Notes: {chord.notes.join(", ")}</>
-        )}
-      </p>
-
       {/* Chord diagram (TAB when voicing exists, dot-style otherwise) */}
-      <ChordDiagram
-        chordName={chord.name}
-        tuning={tuning}
-        voicing={chord.voicing}
-        onRequestVoicingEditor={() => setShowVoicingEditor(true)}
-        activeLeadNotes={activeLeadNotes}
-      />
-
-      {/* Fretboard hint when editor is open */}
-      {showVoicingEditor && (
-        <div className="mb-1 text-xs text-center" style={{ color: 'var(--accent)' }}>
-          Click a note on the fretboard to fill it into the editor below
-        </div>
-      )}
-
-      <div className="overflow-x-auto">
-        <FretboardDiagram
-          chordNotes={chord.notes}
+      <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
+        <ChordDiagram
+          chordName={chord.name}
           tuning={tuning}
-          capoSettings={capoSettings}
-          onFretClick={handleFretClick}
+          voicing={chord.voicing}
           activeLeadNotes={activeLeadNotes}
         />
       </div>
-
-      {/* Inline voicing editor */}
-      {showVoicingEditor && (
-        <ChordVoicingEditor
-          ref={voicingEditorRef}
-          tuning={tuning}
-          initialFrets={chord.voicing?.tuningId === tuning.id ? chord.voicing.frets : undefined}
-          chordName={chord.name}
-          chordNotes={chord.notes}
-          onApply={(frets) => {
-            if (onUpdateVoicing) {
-              onUpdateVoicing(index, { frets, tuningId: tuning.id });
-            }
-            setShowVoicingEditor(false);
-          }}
-          onCancel={() => setShowVoicingEditor(false)}
-        />
-      )}
       </div>
     </div>
   );

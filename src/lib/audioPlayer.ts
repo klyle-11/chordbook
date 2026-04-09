@@ -1,155 +1,284 @@
+import { WorkletSynthesizer } from 'spessasynth_lib';
 import { type Tuning } from './tunings';
 
-// Audio frequencies for notes (in Hz) - 4th octave base frequencies
-const noteFrequencies: { [key: string]: number } = {
-  'C': 261.63,
-  'C#': 277.18,
-  'Db': 277.18,
-  'D': 293.66,
-  'D#': 311.13,
-  'Eb': 311.13,
-  'E': 329.63,
-  'F': 349.23,
-  'F#': 369.99,
-  'Gb': 369.99,
-  'G': 392.00,
-  'G#': 415.30,
-  'Ab': 415.30,
-  'A': 440.00,
-  'A#': 466.16,
-  'Bb': 466.16,
-  'B': 493.88,
+// MIDI semitone offsets for note name -> MIDI number conversion
+const SEMITONE_MAP: Record<string, number> = {
+  'C': 0, 'C#': 1, 'Db': 1,
+  'D': 2, 'D#': 3, 'Eb': 3,
+  'E': 4,
+  'F': 5, 'F#': 6, 'Gb': 6,
+  'G': 7, 'G#': 8, 'Ab': 8,
+  'A': 9, 'A#': 10, 'Bb': 10,
+  'B': 11,
 };
+
+// General MIDI program numbers
+const ACOUSTIC_BASS_PROGRAM = 32;
+
+// MIDI channels
+const GUITAR_CHANNEL = 0;
+const BASS_CHANNEL = 1;
+const STRINGS_HIGH_CHANNEL = 2; // violin for notes >= C4
+const STRINGS_LOW_CHANNEL = 3;  // cello for notes < C4
+
+// Available instruments (General MIDI program numbers for the melody/chord channel)
+export type InstrumentId = 'nylon-guitar' | 'piano' | 'synth-pad' | 'strings' | 'organ';
+
+export interface InstrumentOption {
+  id: InstrumentId;
+  name: string;
+  program: number;
+  reverb?: number;  // CC91 value 0-127
+  chorus?: number;  // CC93 value 0-127
+}
+
+export const INSTRUMENTS: InstrumentOption[] = [
+  { id: 'nylon-guitar', name: 'Nylon Guitar', program: 24 },
+  { id: 'piano', name: 'Piano', program: 0 },
+  { id: 'synth-pad', name: 'Synth Pad', program: 94, reverb: 100, chorus: 90 },
+  { id: 'strings', name: 'Strings', program: 40 },  // violin (high); cello (low) handled separately
+  { id: 'organ', name: 'Organ', program: 19 },       // church organ
+];
+
+export type StrumMode = 'strum' | 'simultaneous';
+
+// SoundFont path (hosted locally in public/ — never loaded from external CDN)
+const SOUNDFONT_PATH = './soundfonts/GeneralUser-GS.sf2';
+const WORKLET_PATH = './spessasynth_processor.min.js';
+
+// SHA-256 of the vetted GeneralUser-GS.sf2 for integrity verification
+const SOUNDFONT_SHA256 = '9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe';
+
+function noteToMidi(note: string, octave: number): number {
+  const semitone = SEMITONE_MAP[note];
+  if (semitone === undefined) return 69; // A4 fallback
+  return 12 * (octave + 1) + semitone;
+}
+
+function noteNameToMidi(noteName: string): number {
+  const match = noteName.match(/^([A-Ga-g][#b]?)(\d+)?$/);
+  if (!match) return 69;
+  const note = match[1].charAt(0).toUpperCase() + match[1].slice(1);
+  const octave = match[2] !== undefined ? parseInt(match[2], 10) : 4;
+  return noteToMidi(note, octave);
+}
+
+function isBassTuning(tuning?: Tuning): boolean {
+  if (!tuning) return false;
+  return tuning.id.startsWith('bass');
+}
+
+async function verifySoundFontIntegrity(buffer: ArrayBuffer): Promise<boolean> {
+  try {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex === SOUNDFONT_SHA256;
+  } catch {
+    // crypto.subtle may not be available in insecure contexts (HTTP)
+    // In dev mode, skip verification; in production this should always be HTTPS
+    console.warn('SoundFont integrity check unavailable (requires secure context)');
+    return true;
+  }
+}
+
+type SynthState = 'uninitialized' | 'loading' | 'ready' | 'failed';
+
+// Volume gain multiplier — allows louder output than default MIDI levels
+const VOLUME_GAIN = 3.0;
 
 class AudioPlayer {
   private audioContext: AudioContext | null = null;
-  private volume: number = 0.3; // Default volume (30%)
+  private synth: WorkletSynthesizer | null = null;
+  private gainNode: GainNode | null = null;
+  private volume: number = 0.5;
+  private synthState: SynthState = 'uninitialized';
+  private initPromise: Promise<void> | null = null;
+  private currentInstrument: InstrumentId = 'nylon-guitar';
+  private strumMode: StrumMode = 'strum';
 
   constructor() {
-    // Initialize AudioContext on first user interaction
+    // Preload SoundFont on first user interaction to hide latency
     if (typeof window !== 'undefined') {
-      this.initializeAudioContext();
+      const preload = () => {
+        this.ensureInitialized();
+        document.removeEventListener('pointerdown', preload);
+      };
+      document.addEventListener('pointerdown', preload, { once: true });
     }
   }
 
-  private initializeAudioContext() {
-    try {
-      // @ts-expect-error - WebKit audio context fallback
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    } catch (error) {
-      console.warn('Web Audio API not supported:', error);
+  setVolume(volume: number): void {
+    this.volume = Math.max(0, Math.min(1, volume));
+    if (this.gainNode) {
+      this.gainNode.gain.value = this.volume * VOLUME_GAIN;
     }
-  }
-
-  setVolume(volume: number) {
-    this.volume = Math.max(0, Math.min(1, volume)); // Clamp between 0 and 1
   }
 
   getVolume(): number {
     return this.volume;
   }
 
-  private getFrequencyForNoteAndOctave(note: string, octave: number): number {
-    const baseFreq = noteFrequencies[note];
-    if (!baseFreq) return 440; // Fallback to A4
-    
-    // Calculate frequency for specific octave
-    // Base frequencies are for 4th octave, so adjust accordingly
-    const octaveDifference = octave - 4;
-    return baseFreq * Math.pow(2, octaveDifference);
+  setInstrument(id: InstrumentId): void {
+    this.currentInstrument = id;
+    const instrument = INSTRUMENTS.find(i => i.id === id);
+    if (instrument && this.synth) {
+      if (id === 'strings') {
+        // Violin on high channel, cello on low channel
+        this.synth.programChange(STRINGS_HIGH_CHANNEL, 40); // violin
+        this.synth.programChange(STRINGS_LOW_CHANNEL, 42);  // cello
+        this.synth.controllerChange(STRINGS_HIGH_CHANNEL, 91, 60); // subtle reverb
+        this.synth.controllerChange(STRINGS_LOW_CHANNEL, 91, 60);
+        this.synth.controllerChange(STRINGS_HIGH_CHANNEL, 93, 0);
+        this.synth.controllerChange(STRINGS_LOW_CHANNEL, 93, 0);
+      } else {
+        this.synth.programChange(GUITAR_CHANNEL, instrument.program);
+        // CC91 = reverb depth, CC93 = chorus depth
+        this.synth.controllerChange(GUITAR_CHANNEL, 91, instrument.reverb ?? 0);
+        this.synth.controllerChange(GUITAR_CHANNEL, 93, instrument.chorus ?? 0);
+      }
+    }
   }
 
-  async playNote(note: string, duration: number = 0.5, guitarString?: string, fret?: number, stringIndex?: number, tuning?: Tuning) {
-    if (!this.audioContext) {
-      this.initializeAudioContext();
-    }
+  getInstrument(): InstrumentId {
+    return this.currentInstrument;
+  }
 
-    if (!this.audioContext || this.volume === 0) {
-      return;
-    }
+  setStrumMode(mode: StrumMode): void {
+    this.strumMode = mode;
+  }
 
-    // Resume audio context if suspended (required by some browsers)
+  getStrumMode(): StrumMode {
+    return this.strumMode;
+  }
+
+  getStrumDelay(): number {
+    return this.strumMode === 'strum' ? 40 : 0;
+  }
+
+  private async ensureInitialized(): Promise<boolean> {
+    if (this.synthState === 'ready') return true;
+    if (this.synthState === 'failed') return false;
+    if (!this.initPromise) {
+      this.initPromise = this.initialize();
+    }
+    await this.initPromise;
+    // initialize() sets synthState to 'ready' or 'failed'
+    return this.synthState as SynthState === 'ready';
+  }
+
+  private async initialize(): Promise<void> {
+    this.synthState = 'loading';
+    try {
+      // 1. Create AudioContext
+      // @ts-expect-error - WebKit audio context fallback
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      this.audioContext = new AudioContextClass({ sampleRate: 44100 });
+
+      // 2. Load the AudioWorklet processor (served from public/)
+      await this.audioContext.audioWorklet.addModule(WORKLET_PATH);
+
+      // 3. Fetch SoundFont from local origin only (no external CDN)
+      const response = await fetch(SOUNDFONT_PATH);
+      if (!response.ok) {
+        throw new Error(`SoundFont fetch failed: ${response.status}`);
+      }
+      const sfBuffer = await response.arrayBuffer();
+
+      // 4. Verify SoundFont integrity
+      const isValid = await verifySoundFontIntegrity(sfBuffer);
+      if (!isValid) {
+        throw new Error('SoundFont integrity check failed — file may be corrupted or tampered with');
+      }
+
+      // 5. Create synthesizer and connect through gain node for volume amplification
+      this.synth = new WorkletSynthesizer(this.audioContext);
+      this.gainNode = this.audioContext.createGain();
+      this.gainNode.gain.value = this.volume * VOLUME_GAIN;
+      this.synth.connect(this.gainNode);
+      this.gainNode.connect(this.audioContext.destination);
+
+      // 6. Load the verified SoundFont
+      await this.synth.soundBankManager.addSoundBank(sfBuffer, 'generaluser');
+
+      // 7. Wait for synth to be ready
+      await this.synth.isReady;
+
+      // 8. Set up instrument programs
+      const instrument = INSTRUMENTS.find(i => i.id === this.currentInstrument);
+      this.synth.programChange(GUITAR_CHANNEL, instrument?.program ?? 24);
+      this.synth.programChange(BASS_CHANNEL, ACOUSTIC_BASS_PROGRAM);
+      this.synth.programChange(STRINGS_HIGH_CHANNEL, 40); // violin
+      this.synth.programChange(STRINGS_LOW_CHANNEL, 42);  // cello
+
+      // 9. Set all channels to max MIDI volume — actual volume is controlled by GainNode
+      for (const ch of [GUITAR_CHANNEL, BASS_CHANNEL, STRINGS_HIGH_CHANNEL, STRINGS_LOW_CHANNEL]) {
+        this.synth.controllerChange(ch, 7, 127);
+      }
+
+      this.synthState = 'ready';
+    } catch (error) {
+      console.error('SpessaSynth initialization failed:', error);
+      this.synthState = 'failed';
+    }
+  }
+
+  async playNote(
+    note: string,
+    duration: number = 0.5,
+    guitarString?: string,
+    fret?: number,
+    stringIndex?: number,
+    tuning?: Tuning
+  ): Promise<void> {
+    if (this.volume === 0) return;
+
+    const ready = await this.ensureInitialized();
+    if (!ready || !this.synth || !this.audioContext) return;
+
+    // Resume audio context if suspended (browser autoplay policy)
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume();
     }
 
-    // Calculate the correct frequency based on guitar string and fret
-    let frequency: number;
-    
+    // Calculate MIDI note number
+    let midiNote: number;
+
     if (guitarString && fret !== undefined && stringIndex !== undefined && tuning) {
-      // Use the tuning and string index to get the correct tuning
       const stringTuning = tuning.strings[stringIndex];
       if (stringTuning) {
-        // Calculate frequency: open string frequency * (2^(fret/12))
-        const openStringFreq = this.getFrequencyForNoteAndOctave(stringTuning.note, stringTuning.octave);
-        frequency = openStringFreq * Math.pow(2, fret / 12);
+        const openStringMidi = noteToMidi(stringTuning.note, stringTuning.octave);
+        midiNote = openStringMidi + fret;
       } else {
-        // Fallback to base note frequency
-        const normalizedNote = note.replace(/[0-9]/g, '');
-        frequency = noteFrequencies[normalizedNote] || 440;
+        midiNote = noteNameToMidi(note);
       }
     } else {
-      // Fallback to base note frequency (4th octave)
-      const normalizedNote = note.replace(/[0-9]/g, '');
-      frequency = noteFrequencies[normalizedNote];
-      
-      if (!frequency) {
-        console.warn(`Unknown note: ${note}`);
-        return;
-      }
+      midiNote = noteNameToMidi(note);
     }
 
+    // Clamp to valid MIDI range
+    midiNote = Math.max(0, Math.min(127, midiNote));
+
+    // Select channel based on tuning and instrument
+    let channel: number;
+    if (isBassTuning(tuning)) {
+      channel = BASS_CHANNEL;
+    } else if (this.currentInstrument === 'strings') {
+      // Split: violin for notes >= C4 (60), cello below
+      channel = midiNote >= 60 ? STRINGS_HIGH_CHANNEL : STRINGS_LOW_CHANNEL;
+    } else {
+      channel = GUITAR_CHANNEL;
+    }
+
+    const velocity = 100;
+
     try {
-      // Create oscillator for the tone
-      const oscillator = this.audioContext.createOscillator();
-      const gainNode = this.audioContext.createGain();
-      
-      // Create a filter for more guitar-like tone
-      const filter = this.audioContext.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(2000, this.audioContext.currentTime); // Cut off high frequencies
-      filter.Q.setValueAtTime(1, this.audioContext.currentTime);
+      this.synth.noteOn(channel, midiNote, velocity);
 
-      // Connect nodes: oscillator -> filter -> gain -> destination
-      oscillator.connect(filter);
-      filter.connect(gainNode);
-      gainNode.connect(this.audioContext.destination);
-
-      // Configure oscillator for guitar-like sound
-      oscillator.type = 'sawtooth'; // Sawtooth wave for more harmonics like a guitar
-      oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
-      
-      // Add slight vibrato for more realistic guitar sound
-      const lfoGain = this.audioContext.createGain();
-      const lfo = this.audioContext.createOscillator();
-      lfo.type = 'sine';
-      lfo.frequency.setValueAtTime(4.5, this.audioContext.currentTime); // 4.5 Hz vibrato
-      lfoGain.gain.setValueAtTime(8, this.audioContext.currentTime); // Vibrato depth
-      
-      lfo.connect(lfoGain);
-      lfoGain.connect(oscillator.frequency);
-
-      // Configure volume envelope (guitar-like attack and decay)
-      const now = this.audioContext.currentTime;
-      const attackTime = 0.1; // Slightly longer attack for smoother fade-in
-      const decayTime = 0.3; // Gradual decay
-      const sustainLevel = 0.6; // Sustain at 60% of peak volume
-      const releaseTime = 0.2; // Quick release
-      
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(this.volume, now + attackTime); // Quick attack
-      gainNode.gain.exponentialRampToValueAtTime(this.volume * sustainLevel, now + attackTime + decayTime); // Decay to sustain
-      gainNode.gain.exponentialRampToValueAtTime(this.volume * sustainLevel, now + duration - releaseTime); // Hold sustain
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration); // Release (use 0.001 instead of 0 for exponential ramp)
-
-      // Start oscillators
-      lfo.start(now);
-      oscillator.start(now);
-      
-      // Stop oscillators
-      lfo.stop(now + duration);
-      oscillator.stop(now + duration);
-
+      // Schedule note off
+      setTimeout(() => {
+        this.synth?.noteOff(channel, midiNote);
+      }, duration * 1000);
     } catch (error) {
       console.error('Error playing note:', error);
     }

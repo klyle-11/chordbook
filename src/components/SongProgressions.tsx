@@ -10,9 +10,6 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import SortableChordGrid from './SortableChordGrid';
 import { EditableText } from './EditableText';
-import { formatSongInfo } from '../lib/displayUtils';
-import { SortableChordIcons } from './SortableChordIcons';
-import { BpmInput } from './BpmInput';
 import ChordForm from './ChordForm';
 import { PairedProgressionPanel } from './PairedProgressionPanel';
 import LeadSelector from './LeadSelector';
@@ -20,8 +17,6 @@ import LeadEditor from './LeadEditor';
 
 interface SortableProgressionItemProps {
   progression: NamedProgression;
-  isExpanded: boolean;
-  onToggle: () => void;
   onEdit: (progressionId: string, field: 'name', value: string) => void;
   onDelete: (progressionId: string) => void;
   onChordReorder: (progressionId: string, oldIndex: number, newIndex: number) => void;
@@ -30,18 +25,16 @@ interface SortableProgressionItemProps {
   onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
   onAddNewVoicing: (progressionId: string) => void;
-  onUpdateProgressionBpm: (progressionId: string, bpm: number) => void;
   tuning: Tuning;
   capoSettings: CapoSettings;
-  songBpm: number;
+  bpm: number;
+  beatsPerMeasure: number;
   isNewlyCreated?: boolean;
   activeLeadNotes?: string[];
 }
 
 function SortableProgressionItem({
   progression,
-  isExpanded,
-  onToggle,
   onEdit,
   onDelete,
   onChordReorder,
@@ -50,15 +43,15 @@ function SortableProgressionItem({
   onUpdateChordVoicing,
   onAddChord,
   onAddNewVoicing,
-  onUpdateProgressionBpm,
   tuning,
   capoSettings,
-  songBpm,
+  bpm,
+  beatsPerMeasure,
   isNewlyCreated = false,
   activeLeadNotes
 }: SortableProgressionItemProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  
+
   const {
     attributes,
     listeners,
@@ -71,8 +64,6 @@ function SortableProgressionItem({
     transform: CSS.Transform.toString(transform),
     transition,
   };
-
-  const effectiveBpm = progression.bpm || songBpm;
 
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true);
@@ -95,7 +86,7 @@ function SortableProgressionItem({
       className="themed-card"
       data-progression-id={progression.id}
     >
-      <div className="flex items-center p-4 gap-4">
+      <div className="flex items-center p-3 gap-3">
         {/* Drag Handle */}
         <div
           {...attributes}
@@ -111,26 +102,10 @@ function SortableProgressionItem({
           </div>
         </div>
 
-          {/* Expand/Collapse Button */}
-          <button
-            onClick={onToggle}
-            className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
-            title={isExpanded ? 'Collapse' : 'Expand'}
-          >
-            <svg 
-              className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-
           {/* Progression Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <EditableText 
+              <EditableText
                 value={progression.name}
                 onChange={(value) => onEdit(progression.id, 'name', value)}
                 placeholder="Untitled Progression"
@@ -141,31 +116,6 @@ function SortableProgressionItem({
                 ({progression.chords.length} chord{progression.chords.length !== 1 ? 's' : ''})
               </span>
             </div>
-            
-            <div className="flex items-center gap-4 mt-1">
-              <span className="text-sm text-gray-500">
-                {formatSongInfo(tuning, capoSettings, effectiveBpm)}
-              </span>
-              
-              {progression.chords.length > 0 && (
-                <SortableChordIcons 
-                  chords={progression.chords} 
-                  tuning={tuning} 
-                  className="flex-shrink-0" 
-                  onReorder={(oldIndex, newIndex) => onChordReorder(progression.id, oldIndex, newIndex)}
-                />
-              )}
-            </div>
-          </div>
-
-          {/* BPM Control */}
-          <div className="flex items-center gap-2 mr-4">
-            <BpmInput
-              bpm={effectiveBpm}
-              onChange={(bpm) => onUpdateProgressionBpm(progression.id, bpm)}
-              size="sm"
-              className="w-16"
-            />
           </div>
 
           {/* Delete Button */}
@@ -180,48 +130,46 @@ function SortableProgressionItem({
           </button>
       </div>
 
-      {/* Expanded Content */}
-      {isExpanded && (
-        <div className="px-4 pb-4 border-t border-gray-100">
-          <div className="mt-4">
-            {/* Chord Form for adding chords */}
-            <div className="mb-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-1">
-                  <ChordForm onAddChord={(chordName) => onAddChord(progression.id, chordName)} />
-                </div>
-                <button
-                  onClick={() => onAddNewVoicing(progression.id)}
-                  className="mt-0 px-3 py-2 text-sm rounded transition-colors flex items-center gap-1.5 whitespace-nowrap"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    color: 'var(--text-secondary)',
-                    border: '1px solid var(--border)',
-                  }}
-                  title="Add a new chord by entering frets directly in the TAB editor"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  New Voicing
-                </button>
-              </div>
+      {/* Chord Diagrams + Add Form */}
+      <div className="px-3 pb-3">
+        {/* Chord Form for adding chords */}
+        <div className="mb-3">
+          <div className="flex items-start gap-2">
+            <div className="flex-1">
+              <ChordForm onAddChord={(chordName) => onAddChord(progression.id, chordName)} />
             </div>
-            
-            {/* Chord Grid */}
-            <SortableChordGrid
-              progression={progression.chords}
-              tuning={tuning}
-              capoSettings={capoSettings}
-              onReorder={(oldIndex, newIndex) => onChordReorder(progression.id, oldIndex, newIndex)}
-              onReplace={(index) => onChordReplace(progression.id, index)}
-              onRemove={(index) => onChordRemove(progression.id, index)}
-              onUpdateVoicing={(index, voicing) => onUpdateChordVoicing(progression.id, index, voicing)}
-              activeLeadNotes={activeLeadNotes}
-            />
+            <button
+              onClick={() => onAddNewVoicing(progression.id)}
+              className="mt-0 px-2 py-1.5 text-xs rounded transition-colors flex items-center gap-1 whitespace-nowrap"
+              style={{
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border)',
+              }}
+              title="Add a new chord by entering frets directly in the TAB editor"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Voicing
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Chord Grid */}
+        <SortableChordGrid
+          progression={progression.chords}
+          tuning={tuning}
+          capoSettings={capoSettings}
+          onReorder={(oldIndex, newIndex) => onChordReorder(progression.id, oldIndex, newIndex)}
+          onReplace={(index) => onChordReplace(progression.id, index)}
+          onRemove={(index) => onChordRemove(progression.id, index)}
+          onUpdateVoicing={(index, voicing) => onUpdateChordVoicing(progression.id, index, voicing)}
+          activeLeadNotes={activeLeadNotes}
+          bpm={progression.bpm || bpm}
+          beatsPerMeasure={beatsPerMeasure}
+        />
+      </div>
     </div>
 
     {showDeleteConfirm && (
@@ -292,7 +240,7 @@ export default function SongProgressions({
   timeSignature,
   onReorderProgressions,
   onEditProgression,
-  onUpdateProgressionBpm,
+  onUpdateProgressionBpm: _onUpdateProgressionBpm,
   onDeleteProgression,
   onChordReorder,
   onChordReplace,
@@ -320,7 +268,6 @@ export default function SongProgressions({
   onDissociateLeadFromSong,
   songName,
 }: SongProgressionsProps) {
-  const [expandedProgressions, setExpandedProgressions] = useState<Set<string>>(new Set());
   const [newlyCreatedProgression, setNewlyCreatedProgression] = useState<string | null>(null);
   const [pairingMode, setPairingMode] = useState(false);
   const [selectedForPairing, setSelectedForPairing] = useState<Set<string>>(new Set());
@@ -331,26 +278,13 @@ export default function SongProgressions({
   const [showLeadEditor, setShowLeadEditor] = useState(false);
   const progressionsRef = useRef<HTMLDivElement>(null);
 
-    // Auto-expand progressions that are newly created or when there's only one progression
   useEffect(() => {
     if (progressions.length === 1) {
-      // If there's only one progression, expand it (common when creating new songs)
-      setExpandedProgressions(new Set([progressions[0].id]));
       setNewlyCreatedProgression(progressions[0].id);
     } else if (progressions.length > 1) {
-      // Find progressions without chords (likely newly created)
       const emptyProgressions = progressions.filter(p => p.chords.length === 0).map(p => p.id);
-      
       if (emptyProgressions.length > 0) {
-        setExpandedProgressions(prev => {
-          const newSet = new Set(prev);
-          emptyProgressions.forEach(id => newSet.add(id));
-          return newSet;
-        });
-        // Set the most recently created empty progression for focus
-        if (emptyProgressions.length > 0) {
-          setNewlyCreatedProgression(emptyProgressions[0]);
-        }
+        setNewlyCreatedProgression(emptyProgressions[0]);
       }
     }
   }, [progressions]);
@@ -401,18 +335,6 @@ export default function SongProgressions({
         }
       }, 150); // Increased delay to ensure DOM updates
     }
-  };
-
-  const toggleExpanded = (progressionId: string) => {
-    setExpandedProgressions(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(progressionId)) {
-        newSet.delete(progressionId);
-      } else {
-        newSet.add(progressionId);
-      }
-      return newSet;
-    });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -656,8 +578,6 @@ export default function SongProgressions({
               )}
               <SortableProgressionItem
                 progression={progression}
-                isExpanded={!pairingMode && expandedProgressions.has(progression.id)}
-                onToggle={() => !pairingMode && toggleExpanded(progression.id)}
                 onEdit={onEditProgression}
                 onDelete={onDeleteProgression}
                 onChordReorder={onChordReorder}
@@ -666,10 +586,10 @@ export default function SongProgressions({
                 onUpdateChordVoicing={onUpdateChordVoicing}
                 onAddChord={onAddChord}
                 onAddNewVoicing={onAddNewVoicing}
-                onUpdateProgressionBpm={onUpdateProgressionBpm}
                 tuning={tuning}
                 capoSettings={capoSettings}
-                songBpm={bpm}
+                bpm={bpm}
+                beatsPerMeasure={timeSignature.beatsPerMeasure}
                 isNewlyCreated={newlyCreatedProgression === progression.id}
                 activeLeadNotes={activeLeadNotes}
               />

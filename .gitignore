@@ -23,3 +23,9 @@ dist-electron
 *.njsproj
 *.sln
 *.sw?
+
+# SoundFont files (large binaries, hosted locally)
+public/soundfonts/*.sf2
+
+# SpessaSynth worklet processor (copied from node_modules via postinstall)
+public/spessasynth_processor.min.js

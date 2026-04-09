@@ -10,7 +10,18 @@
       "Bash(wc -l /Users/kabdellah/dev/chordbook/src/components/*.tsx)",
       "Bash(grep -n \"DraggableChordCard\\\\|SortableChordGrid\\\\|SongProgressions\" /Users/kabdellah/dev/chordbook/src/components/*.tsx)",
       "Bash(grep -r \"useState.*boolean\\\\|state.*toggle\" /Users/kabdellah/dev/chordbook/src/components/*.tsx)",
-      "Bash(wc -l /Users/kabdellah/dev/chordbook/src/**/*.ts /Users/kabdellah/dev/chordbook/src/**/*.tsx)"
+      "Bash(wc -l /Users/kabdellah/dev/chordbook/src/**/*.ts /Users/kabdellah/dev/chordbook/src/**/*.tsx)",
+      "Bash(sort -t: -k2 -rn)",
+      "Bash(npm search:*)",
+      "Bash(find /Users/kabdellah/dev/chordbook/GeneralUser-GS -type f -exec ls -lh {} \\\\;)",
+      "Bash(awk '{print $5, $9}')",
+      "Bash(npm ls:*)",
+      "Bash(npm info:*)",
+      "Bash(npm view:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:spessasus.github.io)",
+      "Bash(mkdir -p /Users/kabdellah/dev/chordbook/public/soundfonts)",
+      "Bash(cp /Users/kabdellah/dev/chordbook/GeneralUser-GS/GeneralUser-GS.sf2 /Users/kabdellah/dev/chordbook/public/soundfonts/GeneralUser-GS.sf2)"
     ]
   }
 }

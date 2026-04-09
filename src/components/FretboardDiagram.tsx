@@ -1,5 +1,5 @@
 import { getFretsForNoteOnString } from "../lib/fretUtils";
-import { getFretPositions } from "../lib/fretPositions";
+import { getFretPositions, getFretCenterPosition } from "../lib/fretPositions";
 import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable, applyCapo } from "../lib/tunings";
 import FretMarker from "./FretMarker";
 
@@ -9,14 +9,31 @@ interface FretboardDiagramProps {
     capoSettings: CapoSettings;
     onFretClick?: (stringIndex: number, fret: number, note: string) => void;
     activeLeadNotes?: string[];
+    previewNotes?: string[];
+    voicingFrets?: (number | null)[];
 }
 
-export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick, activeLeadNotes }: FretboardDiagramProps) {
+export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick, activeLeadNotes, previewNotes, voicingFrets }: FretboardDiagramProps) {
     const effectiveTuning = capoSettings.enabled && capoSettings.fret > 0
         ? applyCapo(tuning, capoSettings.fret)
         : tuning;
     const strings = getTuningStrings(effectiveTuning);
     const fretPositions = getFretPositions();
+
+    // Build sets for voicing highlight lookup: exact position and octave (+12)
+    const voicingSet = new Set<string>();
+    const octaveVoicingSet = new Set<string>();
+    if (voicingFrets) {
+        voicingFrets.forEach((fret, stringIndex) => {
+            if (fret !== null && fret !== undefined) {
+                voicingSet.add(`${stringIndex}-${fret}`);
+                const octaveFret = fret + 12;
+                if (octaveFret <= 24) {
+                    octaveVoicingSet.add(`${stringIndex}-${octaveFret}`);
+                }
+            }
+        });
+    }
     return (
         <div className="mt-3 p-2 sm:p-3 bg-gray-100 rounded-lg border border-gray-200">
             <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-800">
@@ -86,19 +103,24 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                 )}
 
                                 {/* Chord note markers */}
-                                {chordMarkers.map((marker, i) => (
-                                    <FretMarker
-                                        key={`chord-${marker.note}-${marker.fret}-${i}`}
-                                        fret={marker.fret}
-                                        note={marker.note}
-                                        guitarString={stringRoot}
-                                        stringIndex={stringIndex}
-                                        tuning={tuning}
-                                        onFretClick={onFretClick}
-                                        isLeadNote={chordNoteSet?.has(marker.note)}
-                                        isOverlap={chordNoteSet?.has(marker.note)}
-                                    />
-                                ))}
+                                {chordMarkers.map((marker, i) => {
+                                    const key = `${stringIndex}-${marker.fret}`;
+                                    return (
+                                        <FretMarker
+                                            key={`chord-${marker.note}-${marker.fret}-${i}`}
+                                            fret={marker.fret}
+                                            note={marker.note}
+                                            guitarString={stringRoot}
+                                            stringIndex={stringIndex}
+                                            tuning={tuning}
+                                            onFretClick={onFretClick}
+                                            isLeadNote={chordNoteSet?.has(marker.note)}
+                                            isOverlap={chordNoteSet?.has(marker.note)}
+                                            isVoicing={voicingSet.has(key)}
+                                            isOctaveVoicing={octaveVoicingSet.has(key)}
+                                        />
+                                    );
+                                })}
 
                                 {/* Lead-only note markers */}
                                 {leadOnlyMarkers.map((marker, i) => (
@@ -113,6 +135,36 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                         isLeadNote
                                     />
                                 ))}
+
+                                {/* Preview/next-chord note markers (faded) */}
+                                {previewNotes && previewNotes
+                                    .filter(n => !chordNotes.includes(n))
+                                    .flatMap((note) =>
+                                        getFretsForNoteOnString(stringRoot, note)
+                                            .filter(fret => fret <= 24)
+                                            .filter(fret => isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0))
+                                            .map((fret) => ({ note, fret }))
+                                    )
+                                    .map((marker, i) => (
+                                        <div
+                                            key={`preview-${marker.note}-${marker.fret}-${i}`}
+                                            className="absolute w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold border-2 z-5"
+                                            style={{
+                                                left: `${getFretCenterPosition(marker.fret)}%`,
+                                                transform: 'translateX(-50%) translateY(-50%)',
+                                                top: '50%',
+                                                background: 'var(--accent)',
+                                                borderColor: 'var(--accent)',
+                                                color: '#fff',
+                                                opacity: 0.3,
+                                                pointerEvents: 'none',
+                                            }}
+                                            title={`Next: ${marker.note}`}
+                                        >
+                                            {marker.note}
+                                        </div>
+                                    ))
+                                }
                             </div>
 
                             {/* Fret numbers for reference */}

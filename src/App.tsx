@@ -30,6 +30,7 @@ import SongManager from './components/SongManager';
 import SongProgressions from './components/SongProgressions';
 import ThemePicker from './components/ThemePicker';
 import { TimeSignatureSelector } from './components/TimeSignatureSelector';
+import { InstrumentSelector } from './components/InstrumentSelector';
 
 function App() {
   const [songs, setSongs] = useState<Song[]>([]);
@@ -665,6 +666,7 @@ function App() {
                 capoSettings={capoSettings}
                 onCapoChange={handleCapoChange}
               />
+              <InstrumentSelector />
             </div>
           </div>
         </div>

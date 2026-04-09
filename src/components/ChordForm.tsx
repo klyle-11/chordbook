@@ -254,24 +254,27 @@ export interface ChordFormRef {
     };
 
     return (
-        <div className="mb-4">
+        <div className="mb-2">
             {replaceMode && (
-                <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                <div className="mb-2 px-3 py-2 rounded-lg" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--accent)' }}>
                     <div className="flex items-center justify-between">
-                        <p className="text-blue-700 text-sm">
-                            <span className="font-medium">Replace mode:</span> Replacing "{replaceMode.originalChord}" at position {replaceMode.chordIndex + 1}
+                        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                            <span className="font-medium" style={{ color: 'var(--accent)' }}>Replace:</span> "{replaceMode.originalChord}" at position {replaceMode.chordIndex + 1}
                         </p>
                         <button
                             onClick={cancelReplace}
-                            className="text-blue-600 hover:text-blue-800 text-xs underline"
+                            className="text-xs underline transition-colors"
+                            style={{ color: 'var(--text-muted)' }}
+                            onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+                            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
                         >
                             Cancel
                         </button>
                     </div>
                 </div>
             )}
-            
-            <form ref={formRef} onSubmit={handleSubmit} className="flex space-x-2">
+
+            <form ref={formRef} onSubmit={handleSubmit} className="flex items-center gap-2">
                 <input
                     ref={inputRef}
                     type="text"
@@ -279,14 +282,43 @@ export interface ChordFormRef {
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     onClick={handleClick}
-                    placeholder={replaceMode ? `Replace "${replaceMode.originalChord}" with...` : "Enter chord name (e.g., C6) or custom chord [C, E, G]"}
-                    className="p-2 border border-gray-300 rounded text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder={replaceMode ? `Replace "${replaceMode.originalChord}" with...` : "Chord name or [C, E, G]"}
+                    className="flex-1 px-3 py-1.5 text-sm rounded-lg transition-colors"
+                    style={{
+                      background: 'var(--bg-secondary)',
+                      color: 'var(--text)',
+                      border: '1px solid var(--border)',
+                      outline: 'none',
+                    }}
+                    onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                    onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
                 />
-                <button 
-                    type="submit" 
-                    className={`px-4 py-2 text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        replaceMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-500 hover:bg-blue-600'
-                    }`}
+                <button
+                    type="submit"
+                    className="text-sm font-medium transition-colors"
+                    style={{
+                      color: 'var(--accent)',
+                      background: 'none',
+                      border: 'none',
+                      borderBottom: '1.5px solid var(--accent)',
+                      padding: '2px 0',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = 'var(--accent)';
+                      e.currentTarget.style.color = '#fff';
+                      e.currentTarget.style.padding = '2px 8px';
+                      e.currentTarget.style.borderRadius = '4px';
+                      e.currentTarget.style.borderBottom = '1.5px solid transparent';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = 'none';
+                      e.currentTarget.style.color = 'var(--accent)';
+                      e.currentTarget.style.padding = '2px 0';
+                      e.currentTarget.style.borderRadius = '0';
+                      e.currentTarget.style.borderBottom = '1.5px solid var(--accent)';
+                    }}
                 >
                     {getButtonText()}
                 </button>
@@ -294,63 +326,64 @@ export interface ChordFormRef {
                     <button
                         type="button"
                         onClick={cancelReplace}
-                        className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        className="text-sm transition-colors underline"
+                        style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
                     >
                         Cancel
                     </button>
                 )}
             </form>
-            
+
             {/* Chord preview */}
             {previewNotes.length > 0 && !error && (
-                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-                    <p className="text-green-700 text-sm">
+                <div className="mt-1.5 px-3 py-1.5 rounded-lg text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+                    <p style={{ color: 'var(--text-secondary)' }}>
                         {existingChord ? (
                             <>
-                                <span className="font-medium">{input.trim()}</span> matches existing chord: <span className="font-bold text-green-800">{existingChord}</span>
+                                <span style={{ color: 'var(--text)' }}>{input.trim()}</span> matches <span className="font-semibold" style={{ color: 'var(--accent)' }}>{existingChord}</span>
                             </>
                         ) : (
                             <>
-                                <span className="font-medium">{input.trim()}</span> contains: {previewNotes.join(", ")}
-                                {isCustomChord && <span className="italic text-green-600"> (custom chord)</span>}
+                                <span style={{ color: 'var(--text)' }}>{input.trim()}</span> = {previewNotes.join(", ")}
+                                {isCustomChord && <span style={{ color: 'var(--text-muted)' }}> (custom)</span>}
                             </>
                         )}
                     </p>
                 </div>
             )}
-            
+
             {error && (
-                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
-                    <p className="text-red-700 text-sm">{error}</p>
+                <div className="mt-1.5 px-3 py-1.5 rounded-lg text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--danger, #ef4444)' }}>
+                    <p style={{ color: 'var(--danger, #ef4444)' }}>{error}</p>
                     {suggestions.length > 0 && (
-                        <div className="mt-2">
-                            <p className="text-red-600 text-xs mb-1">Did you mean:</p>
-                            <div className="flex gap-2">
-                                {suggestions.map((suggestion) => (
-                                    <button
-                                        key={suggestion}
-                                        onClick={() => handleSuggestionClick(suggestion)}
-                                        className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded hover:bg-blue-200 transition-colors"
-                                    >
-                                        {suggestion}
-                                    </button>
-                                ))}
-                            </div>
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                            <span style={{ color: 'var(--text-muted)' }}>Try:</span>
+                            {suggestions.map((suggestion) => (
+                                <button
+                                    key={suggestion}
+                                    onClick={() => handleSuggestionClick(suggestion)}
+                                    className="px-2 py-0.5 rounded text-xs font-medium transition-colors"
+                                    style={{
+                                      background: 'var(--accent)',
+                                      color: '#fff',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                    }}
+                                >
+                                    {suggestion}
+                                </button>
+                            ))}
                         </div>
                     )}
                 </div>
             )}
-            
-            {/* Help text for custom chords */}
-            {!error && (
-                <div className="mt-1">
-                    <p className="text-xs text-gray-500">
-                        {replaceMode ? 
-                            `Replacing chord at position ${replaceMode.chordIndex + 1}. Enter a new chord or press Cancel to exit replace mode.` :
-                            "Tip: Create custom chords by typing notes in brackets, e.g., [C, E, G, B♭]"
-                        }
-                    </p>
-                </div>
+
+            {!error && !replaceMode && (
+                <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Custom chords: [C, E, G, Bb]
+                </p>
             )}
         </div>
     );
