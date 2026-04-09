@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { getFretPositions, getFretCenterPosition } from '../lib/fretPositions';
+import { getFretPositions } from '../lib/fretPositions';
 import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable, applyCapo } from '../lib/tunings';
 import { audioPlayer } from '../lib/audioPlayer';
 import type { LeadNote } from '../types/lead';

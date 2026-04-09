@@ -315,7 +315,7 @@ export default function SongProgressions({
   activeLeadNotes,
   onActivateLead,
   onCreateLead,
-  onDeleteLead,
+  onDeleteLead: _onDeleteLead,
   onAssociateLeadWithSong,
   onDissociateLeadFromSong,
   songName,

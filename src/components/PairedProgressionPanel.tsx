@@ -32,7 +32,7 @@ export function PairedProgressionPanel({
   bpm,
   onUpdateChordBeats,
   onRenamePairing,
-  onDeletePairing,
+  onDeletePairing: _onDeletePairing,
   onReorderPairingProgressions,
   onClose,
 }: PairedProgressionPanelProps) {

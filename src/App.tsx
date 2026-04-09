@@ -19,7 +19,7 @@ import {
 } from './lib/songStorage';
 import { loadTheme, saveTheme, applyTheme, type Theme, themes } from './lib/theme';
 import { findVoicingsForNotes } from './lib/savedVoicingLibrary';
-import { getAllLeads, saveLead as saveLeadToDb, deleteLead as deleteLeadFromDb, updateLead as updateLeadInDb } from './lib/leadStorage';
+import { getAllLeads, saveLead as saveLeadToDb, deleteLead as deleteLeadFromDb } from './lib/leadStorage';
 import { db } from './lib/db';
 
 import BackupManager from './components/BackupManager';
