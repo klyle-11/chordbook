@@ -3,6 +3,8 @@ import type { Song } from '../types/song';
 import { EditableText } from './EditableText';
 import { DEFAULT_TUNING } from '../lib/tunings';
 import PDFExportDialog from './PDFExportDialog';
+import FretboardDiagram from './FretboardDiagram';
+import { getUniqueNotesFromSong } from '../lib/songAnalysis';
 
 interface SongManagerProps {
   songs: Song[];
@@ -28,6 +30,7 @@ export default function SongManager({
   const [songToDelete, setSongToDelete] = useState<string | null>(null);
   const [showPDFExport, setShowPDFExport] = useState(false);
   const [showAllSongs, setShowAllSongs] = useState(false);
+  const [showScaleFlyout, setShowScaleFlyout] = useState(false);
 
   const sortedSongs = [...songs].sort((a, b) => {
     const aLast = a.lastOpened?.getTime() || 0;
@@ -108,7 +111,7 @@ export default function SongManager({
   // ─── Song Detail View (compact single-row for sticky header) ───
   if (currentSong) {
     return (
-      <div>
+      <div style={{ position: 'relative' }}>
         <div className="song-header">
           {/* Left: back + title */}
           <div className="song-header__left">
@@ -143,6 +146,30 @@ export default function SongManager({
           {/* Right: actions */}
           <div className="song-header__actions">
             <button
+              onClick={() => setShowScaleFlyout(!showScaleFlyout)}
+              className="song-header__action-btn"
+              title="Song scale"
+              data-active={showScaleFlyout}
+              style={showScaleFlyout ? { background: 'var(--accent-subtle)', color: 'var(--accent)' } : undefined}
+            >
+              {/* Fretboard icon */}
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                {/* Fretboard outline */}
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                {/* Frets */}
+                <line x1="7.5" y1="4" x2="7.5" y2="20" />
+                <line x1="12" y1="4" x2="12" y2="20" />
+                <line x1="16.5" y1="4" x2="16.5" y2="20" />
+                {/* Strings */}
+                <line x1="3" y1="8" x2="21" y2="8" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="16" x2="21" y2="16" />
+                {/* Dots */}
+                <circle cx="9.75" cy="10" r="1.2" fill="currentColor" stroke="none" />
+                <circle cx="14.25" cy="14" r="1.2" fill="currentColor" stroke="none" />
+              </svg>
+            </button>
+            <button
               onClick={() => setShowPDFExport(true)}
               className="song-header__action-btn"
               title="Export PDF"
@@ -163,6 +190,45 @@ export default function SongManager({
             </button>
           </div>
         </div>
+
+        {/* Scale Flyout */}
+        {showScaleFlyout && (() => {
+          const scaleNotes = getUniqueNotesFromSong(currentSong);
+          return (
+            <div className="scale-flyout">
+              <div className="scale-flyout__header">
+                <span className="scale-flyout__title">
+                  Scale &middot; {scaleNotes.length} note{scaleNotes.length !== 1 ? 's' : ''}
+                </span>
+                <div className="scale-flyout__notes">
+                  {scaleNotes.map(n => (
+                    <span key={n} className="scale-flyout__note">{n}</span>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setShowScaleFlyout(false)}
+                  className="scale-flyout__close"
+                  aria-label="Close scale"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              {scaleNotes.length > 0 ? (
+                <div className="scale-flyout__fretboard">
+                  <FretboardDiagram
+                    chordNotes={scaleNotes}
+                    tuning={currentSong.tuning || DEFAULT_TUNING}
+                    capoSettings={currentSong.capoSettings || { fret: 0, enabled: false }}
+                  />
+                </div>
+              ) : (
+                <div className="scale-flyout__empty">Add chords to see scale notes</div>
+              )}
+            </div>
+          );
+        })()}
 
         {renderDeleteDialog()}
 

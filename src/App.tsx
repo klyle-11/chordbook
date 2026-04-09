@@ -22,8 +22,8 @@ import { findVoicingsForNotes } from './lib/savedVoicingLibrary';
 import { getAllLeads, saveLead as saveLeadToDb, deleteLead as deleteLeadFromDb } from './lib/leadStorage';
 import { db } from './lib/db';
 
+import { analyzeProgression, type ProgressionAnalysis } from './lib/harmonicAnalysis';
 import BackupManager from './components/BackupManager';
-import SongScale from './components/SongScale';
 import TuningSelector from './components/TuningSelector';
 import { IntegratedMetronome } from './components/IntegratedMetronome';
 import SongManager from './components/SongManager';
@@ -42,6 +42,7 @@ function App() {
   const [currentTimeSignature, setCurrentTimeSignature] = useState<TimeSignature>({ beatsPerMeasure: 4, beatUnit: 4 });
   const [leads, setLeads] = useState<Lead[]>([]);
   const [activeLeadId, setActiveLeadId] = useState<string | null>(null);
+  const [analysisEnabled, setAnalysisEnabled] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -60,6 +61,12 @@ function App() {
       try {
         const activeLeadEntry = await db.appState.get('activeLeadId');
         if (activeLeadEntry) setActiveLeadId(activeLeadEntry.value || null);
+      } catch {}
+
+      // Restore analysis toggle
+      try {
+        const analysisEntry = await db.appState.get('analysisEnabled');
+        if (analysisEntry) setAnalysisEnabled(analysisEntry.value === 'true');
       } catch {}
 
       const currentId = await loadCurrentSongAsync();
@@ -621,8 +628,21 @@ function App() {
 
   const currentSong = currentSongId ? songs.find(s => s.id === currentSongId) ?? null : null;
 
+  const progressionAnalysis = useMemo((): ProgressionAnalysis | null => {
+    if (!analysisEnabled || !currentSong) return null;
+    const allChords = currentSong.progressions.flatMap(p => p.chords);
+    if (allChords.length === 0) return null;
+    return analyzeProgression(allChords);
+  }, [analysisEnabled, currentSong?.progressions]);
+
+  function handleToggleAnalysis() {
+    const next = !analysisEnabled;
+    setAnalysisEnabled(next);
+    db.appState.put({ key: 'analysisEnabled', value: String(next) });
+  }
+
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+    <div className="app-shell" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
 
       {/* ─── Sticky Header ─── */}
       <div className="sticky-header">
@@ -691,7 +711,8 @@ function App() {
       </div>
 
       {/* ─── Main Content ─── */}
-      <main className="app-container py-8 space-y-8">
+      <main className="app-shell__content">
+        <div className="app-container py-8 space-y-8">
         {/* Song Manager (overview only — when no song is open) */}
         {!currentSong && (
           <section>
@@ -705,13 +726,6 @@ function App() {
               onDeleteSong={handleDeleteSong}
               onBackToOverview={handleBackToOverview}
             />
-          </section>
-        )}
-
-        {/* Song Scale Analysis */}
-        {currentSong && (
-          <section>
-            <SongScale song={currentSong} />
           </section>
         )}
 
@@ -751,15 +765,20 @@ function App() {
               onAssociateLeadWithSong={handleAssociateLeadWithSong}
               onDissociateLeadFromSong={handleDissociateLeadFromSong}
               songName={currentSong.name}
+              analysisEnabled={analysisEnabled}
+              progressionAnalysis={progressionAnalysis}
+              onToggleAnalysis={handleToggleAnalysis}
             />
           </section>
         )}
 
-        {/* Backup */}
-        <section className="max-w-xl mx-auto pt-8">
-          <BackupManager onDataRestored={() => window.location.reload()} />
-        </section>
+        </div>
       </main>
+
+      {/* ─── Footer ─── */}
+      <footer className="app-shell__footer">
+        <BackupManager onDataRestored={() => window.location.reload()} compact />
+      </footer>
     </div>
   )
 }

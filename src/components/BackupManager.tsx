@@ -11,9 +11,10 @@ import {
 
 interface BackupManagerProps {
   onDataRestored?: () => void;
+  compact?: boolean;
 }
 
-export default function BackupManager({ onDataRestored }: BackupManagerProps) {
+export default function BackupManager({ onDataRestored, compact }: BackupManagerProps) {
   const [backupInfo, setBackupInfo] = useState<{ exists: boolean, timestamp?: string }>({ exists: false });
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -104,6 +105,117 @@ export default function BackupManager({ onDataRestored }: BackupManagerProps) {
       setIsRestoring(false);
     }
   };
+
+  const [showMenu, setShowMenu] = useState(false);
+
+  if (compact) {
+    return (
+      <div style={{ position: 'relative' }}>
+        {/* Folder icon trigger */}
+        <button
+          onClick={() => setShowMenu(!showMenu)}
+          className="backup-menu__trigger"
+          aria-label="Backup menu"
+          title="Backup & Restore"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.5 }}>
+            <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+          </svg>
+        </button>
+
+        {/* Context menu */}
+        {showMenu && (
+          <>
+            <div className="backup-menu__backdrop" onClick={() => setShowMenu(false)} />
+            <div className="backup-menu__popover">
+              {backupInfo.exists && backupInfo.timestamp && (
+                <div className="backup-menu__info">
+                  Last backup: {new Date(backupInfo.timestamp).toLocaleString()}
+                </div>
+              )}
+              {statusMessage && (
+                <div className="backup-menu__info" style={{ color: statusMessage.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>
+                  {statusMessage.text}
+                </div>
+              )}
+              <button
+                className="backup-menu__item"
+                onClick={() => { handleCreateFullBackup(); setShowMenu(false); }}
+                disabled={isCreatingBackup}
+              >
+                {isCreatingBackup ? 'Saving...' : 'Backup Now'}
+              </button>
+              <button
+                className="backup-menu__item"
+                onClick={() => { handleDownloadBackup(); setShowMenu(false); }}
+              >
+                Export JSON
+              </button>
+              <button
+                className="backup-menu__item"
+                onClick={() => { setShowImportDialog(true); setShowMenu(false); }}
+                disabled={isRestoring}
+              >
+                Import JSON
+              </button>
+              <button
+                className="backup-menu__item"
+                onClick={() => { setShowRestoreConfirm(true); setShowMenu(false); }}
+                disabled={!backupInfo.exists || isRestoring}
+              >
+                Restore from Local
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Restore confirmation dialog */}
+        {showRestoreConfirm && (
+          <div className="fixed inset-0 themed-overlay flex items-center justify-center z-50 p-4">
+            <div className="themed-dialog p-6 max-w-md w-full animate-fade-in">
+              <h3 className="text-lg font-semibold mb-4" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>Restore from Local Backup</h3>
+              <div className="mb-4 p-3 rounded-lg" style={{ background: 'var(--danger-subtle)' }}>
+                <p className="text-sm" style={{ color: 'var(--danger)' }}>This will replace all current data with the backup.</p>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setShowRestoreConfirm(false)} className="themed-btn-secondary">Cancel</button>
+                <button onClick={handleRestoreFromLocalStorage} disabled={isRestoring} className="themed-btn-danger">
+                  {isRestoring ? 'Restoring...' : 'Restore'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Import dialog */}
+        {showImportDialog && (
+          <div className="fixed inset-0 themed-overlay flex items-center justify-center z-50 p-4">
+            <div className="themed-dialog p-6 max-w-md w-full animate-fade-in">
+              <h3 className="text-lg font-semibold mb-4" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>Import Backup</h3>
+              <input
+                type="file"
+                accept=".json"
+                onChange={e => setImportFile(e.target.files?.[0] || null)}
+                className="block w-full text-sm mb-4"
+                style={{ color: 'var(--text-secondary)' }}
+              />
+              {importFile && (
+                <div className="mb-4 p-3 rounded-lg" style={{ background: 'var(--danger-subtle)' }}>
+                  <p className="text-sm" style={{ color: 'var(--danger)' }}>This will replace all current data.</p>
+                </div>
+              )}
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => { setShowImportDialog(false); setImportFile(null); }} className="themed-btn-secondary">Cancel</button>
+                <button onClick={handleImportBackup} disabled={!importFile || isRestoring} className="themed-btn-primary">
+                  {isRestoring ? 'Importing...' : 'Import'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="themed-card p-6">

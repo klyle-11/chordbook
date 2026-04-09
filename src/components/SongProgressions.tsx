@@ -14,6 +14,7 @@ import { AddChordPanel } from './AddChordPanel';
 import { PairedProgressionPanel } from './PairedProgressionPanel';
 import LeadSelector from './LeadSelector';
 import LeadEditor from './LeadEditor';
+import type { ProgressionAnalysis } from '../lib/harmonicAnalysis';
 
 interface SortableProgressionItemProps {
   progression: NamedProgression;
@@ -245,6 +246,9 @@ interface SongProgressionsProps {
   onAssociateLeadWithSong: (leadId: string) => void;
   onDissociateLeadFromSong: (leadId: string) => void;
   songName: string;
+  analysisEnabled?: boolean;
+  progressionAnalysis?: ProgressionAnalysis | null;
+  onToggleAnalysis?: () => void;
 }
 
 export default function SongProgressions({
@@ -280,6 +284,9 @@ export default function SongProgressions({
   onAssociateLeadWithSong,
   onDissociateLeadFromSong,
   songName,
+  analysisEnabled,
+  progressionAnalysis: _progressionAnalysis,
+  onToggleAnalysis,
 }: SongProgressionsProps) {
   const [newlyCreatedProgression, setNewlyCreatedProgression] = useState<string | null>(null);
   const [pairingMode, setPairingMode] = useState(false);
@@ -478,6 +485,26 @@ export default function SongProgressions({
           )}
         </div>
       </div>
+
+      {/* Analysis Toggle Chip */}
+      {onToggleAnalysis && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)' }}>
+            Analysis:
+          </span>
+          <button
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+            style={{
+              background: analysisEnabled ? 'var(--analysis)' : 'var(--analysis-subtle)',
+              color: analysisEnabled ? '#000' : 'var(--text)',
+              border: '1px solid var(--analysis)',
+            }}
+            onClick={onToggleAnalysis}
+          >
+            {analysisEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+      )}
 
       {/* Lead Editor Modal */}
       {showLeadEditor && (

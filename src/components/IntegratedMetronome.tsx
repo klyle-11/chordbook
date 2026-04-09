@@ -11,7 +11,6 @@ interface IntegratedMetronomeProps {
 
 export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeSignature }: IntegratedMetronomeProps) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isScrolling, setIsScrolling] = useState(false);
   const [showClickVol, setShowClickVol] = useState(false);
   const [bpm, setBpm] = useState(currentBpm || 120);
   const [bpmInput, setBpmInput] = useState(String(currentBpm || 120));
@@ -24,8 +23,6 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeS
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const bpmValidationTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const currentChordIndex = useRef<number>(0);
   const beatCountRef = useRef<number>(0);
   const isSyncingRef = useRef(false);
 
@@ -96,73 +93,12 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeS
     setIsPlaying(false);
   }, []);
 
-  const startAutoScroll = useCallback(() => {
-    if (scrollIntervalRef.current) return;
-    const interval = (60000 / bpm) * beatsPerMeasure;
-    currentChordIndex.current = 0;
-    const scrollToNextChord = () => {
-      const chordElements = document.querySelectorAll('[data-chord-diagram]');
-      if (chordElements.length === 0) return;
-      if (currentChordIndex.current >= chordElements.length) {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        currentChordIndex.current = 0;
-        return;
-      }
-      chordElements[currentChordIndex.current].scrollIntoView({ behavior: 'smooth', block: 'center' });
-      currentChordIndex.current++;
-    };
-    scrollToNextChord();
-    scrollIntervalRef.current = setInterval(scrollToNextChord, interval);
-    setIsScrolling(true);
-  }, [bpm, beatsPerMeasure]);
-
-  const stopAutoScroll = useCallback(() => {
-    if (scrollIntervalRef.current) { clearInterval(scrollIntervalRef.current); scrollIntervalRef.current = null; }
-    setIsScrolling(false);
-    currentChordIndex.current = 0;
-  }, []);
-
   useEffect(() => {
-    if (isScrolling && scrollIntervalRef.current) {
-      clearInterval(scrollIntervalRef.current);
-      scrollIntervalRef.current = null;
-      const interval = (60000 / bpm) * beatsPerMeasure;
-      const scrollToNextChord = () => {
-        const chordElements = document.querySelectorAll('[data-chord-diagram]');
-        if (chordElements.length === 0) return;
-        if (currentChordIndex.current >= chordElements.length) {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-          currentChordIndex.current = 0;
-          return;
-        }
-        chordElements[currentChordIndex.current].scrollIntoView({ behavior: 'smooth', block: 'center' });
-        currentChordIndex.current++;
-      };
-      scrollIntervalRef.current = setInterval(scrollToNextChord, interval);
-    }
-  }, [bpm, beatsPerMeasure, isScrolling]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const activeElement = document.activeElement;
-      const isInputFocused = activeElement && (
-        activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' ||
-        activeElement.tagName === 'SELECT' || (activeElement as HTMLElement).contentEditable === 'true'
-      );
-      if (event.key === 'Escape' && isScrolling) { event.preventDefault(); stopAutoScroll(); }
-      if (event.key === ' ' && !isInputFocused) {
-        event.preventDefault();
-        isScrolling ? stopAutoScroll() : startAutoScroll();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
       if (intervalRef.current) clearInterval(intervalRef.current);
-      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
       if (bpmValidationTimerRef.current) clearTimeout(bpmValidationTimerRef.current);
     };
-  }, [isScrolling, startAutoScroll, stopAutoScroll]);
+  }, []);
 
   const validateAndSetBpm = useCallback((value: string) => {
     if (value === '') { setBpm(120); setBpmInput('120'); return; }
@@ -192,31 +128,50 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeS
   return (
     <>
       <div className="playback-strip">
-        {/* Transport */}
-        <div className="playback-strip__group">
+        {/* Click / Metronome (far left) */}
+        <div className="playback-strip__group" style={{ position: 'relative' }}>
           <button
             onClick={isPlaying ? stopMetronome : startMetronome}
             className="playback-strip__transport-btn"
-            aria-label={isPlaying ? 'Pause metronome' : 'Play metronome'}
+            aria-label={isPlaying ? 'Stop metronome' : 'Start metronome'}
             data-active={isPlaying}
           >
-            {isPlaying ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            )}
-          </button>
-          <button
-            onClick={isScrolling ? stopAutoScroll : startAutoScroll}
-            className="playback-strip__transport-btn"
-            aria-label={isScrolling ? 'Stop auto-scroll' : 'Start auto-scroll'}
-            data-active={isScrolling}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M12 5v14M5 12l7 7 7-7"/>
+            {/* Metronome icon */}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 1.5L6.5 22h11L12 1.5zm0 4.84L15.27 20H8.73L12 6.34z"/>
+              <rect x="11" y="10" width="2" height="6" rx="1"/>
             </svg>
           </button>
           <div className="playback-strip__beat-dot" data-playing={isPlaying} />
+          <button
+            onClick={() => setShowClickVol(!showClickVol)}
+            className="playback-strip__mute-btn"
+            aria-label="Click volume"
+            title="Click volume"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: clickVolume > 0 ? 1 : 0.4 }}>
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+            </svg>
+          </button>
+          {showClickVol && (
+            <>
+              <div className="playback-strip__flyout-backdrop" onClick={() => setShowClickVol(false)} />
+              <div className="playback-strip__flyout">
+                <label className="playback-strip__label">Click Vol</label>
+                <input
+                  type="range" min="0" max="1" step="0.01"
+                  value={clickVolume}
+                  onChange={e => setClickVolume(parseFloat(e.target.value))}
+                  className="playback-strip__slider"
+                  style={{ width: 80, background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${clickVolume * 100}%, var(--slider-track) ${clickVolume * 100}%, var(--slider-track) 100%)` }}
+                  aria-label="Metronome click volume"
+                />
+                <span className="playback-strip__label" style={{ minWidth: 28, textAlign: 'right' }}>
+                  {Math.round(clickVolume * 100)}%
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="playback-strip__sep" />
@@ -257,42 +212,6 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeS
 
         <div className="playback-strip__sep" />
 
-        {/* Click volume (flyout) */}
-        <div className="playback-strip__group" style={{ position: 'relative' }}>
-          <button
-            onClick={() => setShowClickVol(!showClickVol)}
-            className="playback-strip__mute-btn"
-            aria-label="Toggle click volume"
-            title="Click volume"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: clickVolume > 0 ? 1 : 0.4 }}>
-              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
-            </svg>
-          </button>
-          <span className="playback-strip__label">Click</span>
-          {showClickVol && (
-            <>
-              <div className="playback-strip__flyout-backdrop" onClick={() => setShowClickVol(false)} />
-              <div className="playback-strip__flyout">
-                <label className="playback-strip__label">Volume</label>
-                <input
-                  type="range" min="0" max="1" step="0.01"
-                  value={clickVolume}
-                  onChange={e => setClickVolume(parseFloat(e.target.value))}
-                  className="playback-strip__slider"
-                  style={{ width: 80, background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${clickVolume * 100}%, var(--slider-track) ${clickVolume * 100}%, var(--slider-track) 100%)` }}
-                  aria-label="Metronome click volume"
-                />
-                <span className="playback-strip__label" style={{ minWidth: 28, textAlign: 'right' }}>
-                  {Math.round(clickVolume * 100)}%
-                </span>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="playback-strip__sep" />
-
         {/* Master volume */}
         <div className="playback-strip__group">
           <button
@@ -321,17 +240,7 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeS
           />
         </div>
 
-        {/* Shortcut hint */}
-        <span className="playback-strip__hint">Space: scroll</span>
       </div>
-
-      {isScrolling && (
-        <div className="fixed bottom-6 right-6 z-50">
-          <button onClick={stopAutoScroll} className="themed-btn-danger py-3 px-6 rounded-full shadow-lg text-base font-bold">
-            Stop
-          </button>
-        </div>
-      )}
     </>
   );
 }

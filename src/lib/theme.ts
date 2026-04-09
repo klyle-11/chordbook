@@ -40,6 +40,11 @@ export interface Theme {
     fretString: string;
     fretDivider: string;
     fretDividerMuted: string;
+    analysis: string;
+    analysisSubtle: string;
+    fnTonic: string;
+    fnSubdominant: string;
+    fnDominant: string;
   };
 }
 
@@ -84,6 +89,11 @@ export const themes: Theme[] = [
       fretString: '#9a8a6a',
       fretDivider: '#d4c4a8',
       fretDividerMuted: '#e8dcc8',
+      analysis: '#9ca3af',
+      analysisSubtle: 'rgba(156,163,175,0.14)',
+      fnTonic: '#6b9bd2',
+      fnSubdominant: '#6bb58a',
+      fnDominant: '#d27070',
     },
   },
   {
@@ -126,6 +136,11 @@ export const themes: Theme[] = [
       fretString: '#737373',
       fretDivider: '#525252',
       fretDividerMuted: '#404040',
+      analysis: '#c0c7d0',
+      analysisSubtle: 'rgba(192,199,208,0.12)',
+      fnTonic: '#7bafd4',
+      fnSubdominant: '#6bc49a',
+      fnDominant: '#e07070',
     },
   },
   {
@@ -168,6 +183,11 @@ export const themes: Theme[] = [
       fretString: '#6e6494',
       fretDivider: '#3e3568',
       fretDividerMuted: '#2e2558',
+      analysis: '#b8c0d0',
+      analysisSubtle: 'rgba(184,192,208,0.14)',
+      fnTonic: '#7ba8d4',
+      fnSubdominant: '#6bc09a',
+      fnDominant: '#d87878',
     },
   },
   {
@@ -210,6 +230,11 @@ export const themes: Theme[] = [
       fretString: '#5e8a6e',
       fretDivider: '#3a5c48',
       fretDividerMuted: '#264a38',
+      analysis: '#a8b8b0',
+      analysisSubtle: 'rgba(168,184,176,0.14)',
+      fnTonic: '#6ba0c4',
+      fnSubdominant: '#6bb88a',
+      fnDominant: '#d07070',
     },
   },
   {
@@ -252,6 +277,11 @@ export const themes: Theme[] = [
       fretString: '#5e587a',
       fretDivider: '#4a4466',
       fretDividerMuted: '#332e48',
+      analysis: '#c4c8d8',
+      analysisSubtle: 'rgba(196,200,216,0.12)',
+      fnTonic: '#7ba8d8',
+      fnSubdominant: '#6bc49a',
+      fnDominant: '#d87878',
     },
   },
 ];
