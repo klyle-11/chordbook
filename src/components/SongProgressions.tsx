@@ -14,7 +14,8 @@ import { AddChordPanel } from './AddChordPanel';
 import { PairedProgressionPanel } from './PairedProgressionPanel';
 import LeadSelector from './LeadSelector';
 import LeadEditor from './LeadEditor';
-import type { ProgressionAnalysis } from '../lib/harmonicAnalysis';
+import type { ProgressionAnalysis, ChordAnalysis, HarmonicContext } from '../lib/harmonicAnalysis';
+import HarmonicAnalysisPanel from './HarmonicAnalysisPanel';
 
 interface SortableProgressionItemProps {
   progression: NamedProgression;
@@ -33,6 +34,8 @@ interface SortableProgressionItemProps {
   isNewlyCreated?: boolean;
   activeLeadNotes?: string[];
   nextProgressionFirstChord?: import('../types/chord').Chord;
+  chordAnalyses?: ChordAnalysis[];
+  harmonicContext?: HarmonicContext;
 }
 
 function SortableProgressionItem({
@@ -51,7 +54,9 @@ function SortableProgressionItem({
   beatsPerMeasure,
   isNewlyCreated = false,
   activeLeadNotes,
-  nextProgressionFirstChord
+  nextProgressionFirstChord,
+  chordAnalyses,
+  harmonicContext,
 }: SortableProgressionItemProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAddChord, setShowAddChord] = useState(false);
@@ -182,6 +187,8 @@ function SortableProgressionItem({
           bpm={progression.bpm || bpm}
           beatsPerMeasure={beatsPerMeasure}
           nextProgressionFirstChord={nextProgressionFirstChord}
+          chordAnalyses={chordAnalyses}
+          harmonicContext={harmonicContext}
         />
       </div>
     </div>
@@ -285,7 +292,7 @@ export default function SongProgressions({
   onDissociateLeadFromSong,
   songName,
   analysisEnabled,
-  progressionAnalysis: _progressionAnalysis,
+  progressionAnalysis,
   onToggleAnalysis,
 }: SongProgressionsProps) {
   const [newlyCreatedProgression, setNewlyCreatedProgression] = useState<string | null>(null);
@@ -506,6 +513,11 @@ export default function SongProgressions({
         </div>
       )}
 
+      {/* Harmonic Analysis Panel */}
+      {analysisEnabled && progressionAnalysis && (
+        <HarmonicAnalysisPanel analysis={progressionAnalysis} />
+      )}
+
       {/* Lead Editor Modal */}
       {showLeadEditor && (
         <LeadEditor
@@ -636,6 +648,17 @@ export default function SongProgressions({
                   progIdx < progressions.length - 1 && progressions[progIdx + 1].chords.length > 0
                     ? progressions[progIdx + 1].chords[0]
                     : undefined
+                }
+                chordAnalyses={
+                  analysisEnabled && progressionAnalysis
+                    ? progressionAnalysis.chords.slice(
+                        progressions.slice(0, progIdx).reduce((sum, p) => sum + p.chords.length, 0),
+                        progressions.slice(0, progIdx).reduce((sum, p) => sum + p.chords.length, 0) + progression.chords.length
+                      )
+                    : undefined
+                }
+                harmonicContext={
+                  analysisEnabled && progressionAnalysis ? progressionAnalysis.context : undefined
                 }
               />
             </div>

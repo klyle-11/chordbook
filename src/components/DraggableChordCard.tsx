@@ -3,8 +3,10 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Chord, ChordVoicing, SavedVoicing } from '../types/chord';
 import type { Tuning } from '../lib/tunings';
+import type { ChordAnalysis, HarmonicContext } from '../lib/harmonicAnalysis';
 import { findVoicingsForNotes } from '../lib/savedVoicingLibrary';
 import { ChordDiagram } from './ChordDiagram';
+import ChordAnalysisOverlay from './ChordAnalysisOverlay';
 
 interface DraggableChordCardProps {
   chord: Chord;
@@ -15,6 +17,8 @@ interface DraggableChordCardProps {
   activeLeadNotes?: string[];
   isSelected?: boolean;
   onSelect?: (index: number) => void;
+  chordAnalysis?: ChordAnalysis;
+  harmonicContext?: HarmonicContext;
 }
 
 export default function DraggableChordCard({
@@ -26,6 +30,8 @@ export default function DraggableChordCard({
   activeLeadNotes,
   isSelected = false,
   onSelect,
+  chordAnalysis,
+  harmonicContext,
 }: DraggableChordCardProps) {
   const [savedVoicings, setSavedVoicings] = useState<SavedVoicing[]>([]);
   const [showVoicingPicker, setShowVoicingPicker] = useState(false);
@@ -183,6 +189,29 @@ export default function DraggableChordCard({
         </div>
       </div>
 
+      {/* Chord notes */}
+      {chord.notes.length > 0 && (
+        <div className="flex flex-wrap gap-0.5 justify-center mb-1">
+          {chord.notes.map((note, ni) => (
+            <span
+              key={ni}
+              className="inline-block rounded-full text-center"
+              style={{
+                fontSize: '0.55rem',
+                fontFamily: 'var(--font-ui)',
+                fontWeight: 600,
+                padding: '0 4px',
+                lineHeight: '14px',
+                background: 'rgba(96,165,250,0.12)',
+                color: '#60a5fa',
+              }}
+            >
+              {note}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Chord diagram (TAB when voicing exists, dot-style otherwise) */}
       <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
         <ChordDiagram
@@ -192,6 +221,11 @@ export default function DraggableChordCard({
           activeLeadNotes={activeLeadNotes}
         />
       </div>
+
+      {/* Harmonic analysis overlay */}
+      {chordAnalysis && harmonicContext && (
+        <ChordAnalysisOverlay analysis={chordAnalysis} context={harmonicContext} />
+      )}
       </div>
     </div>
   );

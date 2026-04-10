@@ -14,6 +14,7 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeS
   const [showClickVol, setShowClickVol] = useState(false);
   const [bpm, setBpm] = useState(currentBpm || 120);
   const [bpmInput, setBpmInput] = useState(String(currentBpm || 120));
+  const [isEditingBpm, setIsEditingBpm] = useState(false);
   const [clickVolume, setClickVolume] = useState(0.5);
   const [masterVolume, setMasterVolume] = useState(audioPlayer.getVolume());
   const [isMasterMuted, setIsMasterMuted] = useState(false);
@@ -25,6 +26,7 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeS
   const bpmValidationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const beatCountRef = useRef<number>(0);
   const isSyncingRef = useRef(false);
+  const bpmInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -176,38 +178,48 @@ export function IntegratedMetronome({ onTempoChange, currentBpm, disabled, timeS
 
         <div className="playback-strip__sep" />
 
-        {/* BPM */}
+        {/* BPM — display-first, click to edit */}
         <div className="playback-strip__group">
-          <label htmlFor="metro-bpm" className="playback-strip__label">BPM</label>
-          <div className="playback-strip__bpm-stepper">
-            <button
-              className="playback-strip__bpm-step"
-              onClick={() => { const v = Math.max(40, bpm - 1); setBpm(v); setBpmInput(String(v)); }}
-              disabled={disabled || bpm <= 40}
-              aria-label="Decrease BPM"
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 15l-6-6-6 6"/></svg>
-            </button>
+          {isEditingBpm ? (
             <input
-              id="metro-bpm"
+              ref={bpmInputRef}
               type="number"
               min="40"
               max="300"
               value={bpmInput}
               onChange={handleBpmChange}
-              onBlur={handleBpmBlur}
+              onBlur={(e) => {
+                handleBpmBlur(e);
+                setIsEditingBpm(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  validateAndSetBpm(bpmInput);
+                  setIsEditingBpm(false);
+                } else if (e.key === 'Escape') {
+                  setBpmInput(String(bpm));
+                  setIsEditingBpm(false);
+                }
+              }}
               disabled={disabled}
               className="playback-strip__bpm-input"
+              autoFocus
             />
+          ) : (
             <button
-              className="playback-strip__bpm-step"
-              onClick={() => { const v = Math.min(300, bpm + 1); setBpm(v); setBpmInput(String(v)); }}
-              disabled={disabled || bpm >= 300}
-              aria-label="Increase BPM"
+              className="playback-strip__bpm-display"
+              onClick={() => {
+                if (!disabled) {
+                  setBpmInput(String(bpm));
+                  setIsEditingBpm(true);
+                }
+              }}
+              disabled={disabled}
+              title="Click to edit BPM"
             >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M6 9l6 6 6-6"/></svg>
+              {bpm} <span className="playback-strip__label" style={{ marginLeft: 2 }}>BPM</span>
             </button>
-          </div>
+          )}
         </div>
 
         <div className="playback-strip__sep" />

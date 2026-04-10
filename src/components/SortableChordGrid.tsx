@@ -17,6 +17,7 @@ import type { Chord, ChordVoicing } from '../types/chord';
 import type { Tuning, CapoSettings } from '../lib/tunings';
 import { getTuningStrings } from '../lib/tunings';
 import { audioPlayer } from '../lib/audioPlayer';
+import type { ChordAnalysis, HarmonicContext } from '../lib/harmonicAnalysis';
 import DraggableChordCard from './DraggableChordCard';
 import FretboardDiagram from './FretboardDiagram';
 import ChordVoicingEditor, { type ChordVoicingEditorRef } from './ChordVoicingEditor';
@@ -63,6 +64,8 @@ interface SortableChordGridProps {
   bpm: number;
   beatsPerMeasure: number;
   nextProgressionFirstChord?: Chord;
+  chordAnalyses?: ChordAnalysis[];
+  harmonicContext?: HarmonicContext;
 }
 
 export default function SortableChordGrid({
@@ -77,6 +80,8 @@ export default function SortableChordGrid({
   bpm,
   beatsPerMeasure,
   nextProgressionFirstChord,
+  chordAnalyses,
+  harmonicContext,
 }: SortableChordGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [showVoicingEditor, setShowVoicingEditor] = useState(false);
@@ -245,6 +250,8 @@ export default function SortableChordGrid({
                 activeLeadNotes={activeLeadNotes}
                 isSelected={selectedIndex === index}
                 onSelect={handleSelect}
+                chordAnalysis={chordAnalyses?.[index]}
+                harmonicContext={harmonicContext}
               />
             ))}
           </div>
@@ -345,7 +352,7 @@ export default function SortableChordGrid({
                 }}
                 title="Edit voicing"
               >
-                TAB
+                Tab voicing
               </button>
               {/* Close */}
               <button

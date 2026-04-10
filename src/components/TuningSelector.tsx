@@ -8,16 +8,10 @@ interface TuningSelectorProps {
 }
 
 export default function TuningSelector({ currentTuning, onTuningChange, capoSettings, onCapoChange }: TuningSelectorProps) {
-  const handleFretChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const fret = parseInt(e.target.value);
-    onCapoChange({ fret, enabled: fret > 0 });
-  };
-
   return (
     <div className="instrument-strip">
       {/* Tuning */}
       <div className="instrument-strip__group">
-        <label htmlFor="tuning-select" className="instrument-strip__label">Tuning</label>
         <select
           id="tuning-select"
           value={currentTuning.id}
@@ -25,7 +19,8 @@ export default function TuningSelector({ currentTuning, onTuningChange, capoSett
             const t = TUNINGS.find(t => t.id === e.target.value);
             if (t) onTuningChange(t);
           }}
-          className="instrument-strip__select"
+          className="instrument-strip__select instrument-strip__select--compact"
+          aria-label="Tuning"
         >
           {TUNINGS.map(tuning => (
             <option key={tuning.id} value={tuning.id}>{tuning.name}</option>
@@ -35,27 +30,20 @@ export default function TuningSelector({ currentTuning, onTuningChange, capoSett
 
       <div className="instrument-strip__sep" />
 
-      {/* Capo */}
+      {/* Capo — single dropdown, "Off" disables */}
       <div className="instrument-strip__group">
-        <button
-          onClick={() => onCapoChange({ ...capoSettings, enabled: !capoSettings.enabled })}
-          className="instrument-strip__capo-toggle"
-          data-active={capoSettings.enabled}
-          aria-label={capoSettings.enabled ? 'Disable capo' : 'Enable capo'}
-          title={capoSettings.enabled ? 'Capo on' : 'Capo off'}
-        >
-          Capo
-        </button>
         <select
-          value={capoSettings.fret}
-          onChange={handleFretChange}
-          disabled={!capoSettings.enabled}
-          className="instrument-strip__select instrument-strip__select--narrow"
-          aria-label="Capo fret"
+          value={capoSettings.enabled ? capoSettings.fret : 0}
+          onChange={e => {
+            const fret = parseInt(e.target.value);
+            onCapoChange({ fret, enabled: fret > 0 });
+          }}
+          className="instrument-strip__select instrument-strip__select--compact"
+          aria-label="Capo"
         >
-          <option value={0}>Off</option>
+          <option value={0}>No capo</option>
           {Array.from({ length: 12 }, (_, i) => i + 1).map(fret => (
-            <option key={fret} value={fret}>Fret {fret}</option>
+            <option key={fret} value={fret}>Capo {fret}</option>
           ))}
         </select>
       </div>

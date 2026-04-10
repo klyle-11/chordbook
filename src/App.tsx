@@ -18,19 +18,77 @@ import {
   updateProgressionBpm
 } from './lib/songStorage';
 import { loadTheme, saveTheme, applyTheme, type Theme, themes } from './lib/theme';
-import { findVoicingsForNotes } from './lib/savedVoicingLibrary';
+import { findVoicingsForNotes, saveVoicing, getSavedVoicings } from './lib/savedVoicingLibrary';
+import type { SavedVoicing } from './types/chord';
 import { getAllLeads, saveLead as saveLeadToDb, deleteLead as deleteLeadFromDb } from './lib/leadStorage';
 import { db } from './lib/db';
 
 import { analyzeProgression, type ProgressionAnalysis } from './lib/harmonicAnalysis';
 import BackupManager from './components/BackupManager';
-import TuningSelector from './components/TuningSelector';
+
 import { IntegratedMetronome } from './components/IntegratedMetronome';
 import SongManager from './components/SongManager';
 import SongProgressions from './components/SongProgressions';
 import ThemePicker from './components/ThemePicker';
 import { TimeSignatureSelector } from './components/TimeSignatureSelector';
 import { InstrumentSelector } from './components/InstrumentSelector';
+
+/**
+ * Backfill voicings: for any chord without a voicing, apply the latest
+ * saved voicing that matches by chord name or by notes.
+ */
+async function backfillVoicings(songs: Song[]): Promise<Song[]> {
+  const allVoicings = await getSavedVoicings();
+  if (allVoicings.length === 0) return songs;
+
+  // Build lookup: chord name → latest saved voicing
+  // Voicing names are like "Dm7 1", "Dm7 2" — extract the chord name prefix
+  const byChordName = new Map<string, SavedVoicing>();
+  const sorted = [...allVoicings].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  for (const v of sorted) {
+    // Extract chord name: strip trailing " <number>" suffix
+    const chordName = v.name.replace(/\s+\d+$/, '');
+    if (!byChordName.has(chordName)) {
+      byChordName.set(chordName, v);
+    }
+  }
+
+  let changed = false;
+  const updatedSongs = songs.map(song => {
+    const updatedProgressions = song.progressions.map(prog => {
+      const updatedChords = prog.chords.map(chord => {
+        if (chord.voicing) return chord; // already has a voicing
+
+        // Try matching by chord name
+        const match = byChordName.get(chord.name);
+        if (match) {
+          changed = true;
+          return { ...chord, voicing: { frets: match.frets, tuningId: match.tuningId } };
+        }
+
+        // Try matching by notes
+        const noteMatch = sorted.find(v =>
+          v.notes.length > 0 &&
+          chord.notes.length > 0 &&
+          [...new Set(v.notes)].sort().join(',') === [...new Set(chord.notes)].sort().join(',')
+        );
+        if (noteMatch) {
+          changed = true;
+          return { ...chord, voicing: { frets: noteMatch.frets, tuningId: noteMatch.tuningId } };
+        }
+
+        return chord;
+      });
+      return { ...prog, chords: updatedChords };
+    });
+    return { ...song, progressions: updatedProgressions };
+  });
+
+  if (changed) {
+    saveSongs(updatedSongs);
+  }
+  return updatedSongs;
+}
 
 function App() {
   const [songs, setSongs] = useState<Song[]>([]);
@@ -51,7 +109,11 @@ function App() {
       setCurrentTheme(theme);
 
       await migrateLocalStorageToDB();
-      const loadedSongs = await loadSongsAsync();
+      let loadedSongs = await loadSongsAsync();
+
+      // Backfill voicings: apply saved voicings to chords that don't have one
+      loadedSongs = await backfillVoicings(loadedSongs);
+
       setSongs(loadedSongs);
 
       const loadedLeads = await getAllLeads();
@@ -348,38 +410,68 @@ function App() {
     });
   }
 
-  function handleUpdateChordVoicing(progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) {
+  async function handleUpdateChordVoicing(progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) {
     if (!currentSongId) return;
+
+    // Find the chord name being updated so we can propagate
+    const song = songs.find(s => s.id === currentSongId);
+    const prog = song?.progressions.find(p => p.id === progressionId);
+    const targetChord = prog?.chords[chordIndex];
+    let resolvedName = targetChord?.name || '';
+
+    // For new voicings on empty chords, derive the name
+    if (targetChord && targetChord.notes.length === 0 && voicing) {
+      const derivedNotes = getNotesFromVoicing(currentTuning, voicing.frets);
+      const uniqueNotes = [...new Set(derivedNotes)];
+      const detectedName = findChordByNotes(uniqueNotes);
+      resolvedName = detectedName || (uniqueNotes.length > 0 ? `[${uniqueNotes.join(', ')}]` : '');
+    }
+
+    // Auto-save voicing to the bank
+    if (voicing && resolvedName) {
+      const chordNotes = getNotesForChord(resolvedName);
+      const notes = chordNotes.length > 0 ? chordNotes : (targetChord?.notes || []);
+      // Generate a default name: "Dm7 1", "Dm7 2", etc.
+      const existing = await getSavedVoicings(currentTuning.id);
+      const sameChordCount = existing.filter(v => v.name.startsWith(resolvedName)).length;
+      const defaultName = `${resolvedName} ${sameChordCount + 1}`;
+      saveVoicing({
+        name: defaultName,
+        tuningId: currentTuning.id,
+        frets: voicing.frets,
+        notes,
+      });
+    }
+
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song => {
-        if (song.id === currentSongId) {
-          const updatedProgressions = song.progressions.map(p => {
-            if (p.id === progressionId) {
-              const updatedChords = p.chords.map((c, i) => {
-                if (i !== chordIndex) return c;
-                const updated = { ...c, voicing };
-                // When applying a voicing to a chord with no notes (new voicing),
-                // derive notes and chord name from the fret positions
-                if (c.notes.length === 0 && voicing) {
-                  const derivedNotes = getNotesFromVoicing(currentTuning, voicing.frets);
-                  const uniqueNotes = [...new Set(derivedNotes)];
-                  updated.notes = uniqueNotes;
-                  const detectedName = findChordByNotes(uniqueNotes);
-                  if (detectedName) {
-                    updated.name = detectedName;
-                  } else if (uniqueNotes.length > 0) {
-                    updated.name = `[${uniqueNotes.join(', ')}]`;
-                  }
-                }
-                return updated;
-              });
-              return { ...p, chords: updatedChords, updatedAt: new Date() };
+        let songChanged = false;
+        const updatedProgressions = song.progressions.map(p => {
+          const updatedChords = p.chords.map((c, i) => {
+            // Direct target: apply voicing + derive name if needed
+            if (song.id === currentSongId && p.id === progressionId && i === chordIndex) {
+              songChanged = true;
+              const updated = { ...c, voicing };
+              if (c.notes.length === 0 && voicing) {
+                const derivedNotes = getNotesFromVoicing(currentTuning, voicing.frets);
+                const uniqueNotes = [...new Set(derivedNotes)];
+                updated.notes = uniqueNotes;
+                const detectedName = findChordByNotes(uniqueNotes);
+                if (detectedName) updated.name = detectedName;
+                else if (uniqueNotes.length > 0) updated.name = `[${uniqueNotes.join(', ')}]`;
+              }
+              return updated;
             }
-            return p;
+            // Propagate: same chord name across ALL songs gets the voicing
+            if (resolvedName && c.name === resolvedName && voicing) {
+              songChanged = true;
+              return { ...c, voicing };
+            }
+            return c;
           });
-          return { ...song, progressions: updatedProgressions, updatedAt: new Date() };
-        }
-        return song;
+          return songChanged ? { ...p, chords: updatedChords, updatedAt: new Date() } : p;
+        });
+        return songChanged ? { ...song, progressions: updatedProgressions, updatedAt: new Date() } : song;
       });
       saveSongs(updatedSongs);
       return updatedSongs;
@@ -680,12 +772,6 @@ function App() {
                 onChange={handleTimeSignatureChange}
                 disabled={!currentSongId}
               />
-              <TuningSelector
-                currentTuning={currentTuning}
-                onTuningChange={handleTuningChange}
-                capoSettings={capoSettings}
-                onCapoChange={handleCapoChange}
-              />
               <InstrumentSelector />
             </div>
           </div>
@@ -701,9 +787,12 @@ function App() {
                 onSelectSong={handleSelectSong}
                 onCreateSong={handleCreateSong}
                 onRenameSong={handleRenameSong}
-
                 onDeleteSong={handleDeleteSong}
                 onBackToOverview={handleBackToOverview}
+                currentTuning={currentTuning}
+                onTuningChange={handleTuningChange}
+                capoSettings={capoSettings}
+                onCapoChange={handleCapoChange}
               />
             </div>
           </div>

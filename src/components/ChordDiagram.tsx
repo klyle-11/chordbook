@@ -32,9 +32,6 @@ function TabView({ voicing, tuning, chordName, activeLeadNotes }: { voicing: Cho
     <div className="tab-box">
       <div className="tab-box__title">{chordName}</div>
       <div className="tab-box__body">
-        <div className="tab-box__gutter">
-          <span>T</span><span>A</span><span>B</span>
-        </div>
         <div className="tab-box__strings">
           {strings.map((name, i) => {
             const fret = voicing.frets[i];

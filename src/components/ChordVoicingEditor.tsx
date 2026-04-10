@@ -288,19 +288,6 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
 
       {/* Action buttons */}
       <div className="flex gap-2 mt-4 flex-wrap">
-        {suggestions.some(s => s !== null) && frets.some((f, i) => f === null && suggestions[i]) && (
-          <button
-            onClick={fillAllSuggestions}
-            className="px-3 py-1.5 text-sm rounded transition-colors"
-            style={{
-              background: 'var(--bg-card)',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            Fill Suggested
-          </button>
-        )}
         <button
           onClick={() => onApply(frets)}
           disabled={!hasAnyFret}

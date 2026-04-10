@@ -21,7 +21,20 @@
       "WebFetch(domain:www.npmjs.com)",
       "WebFetch(domain:spessasus.github.io)",
       "Bash(mkdir -p /Users/kabdellah/dev/chordbook/public/soundfonts)",
-      "Bash(cp /Users/kabdellah/dev/chordbook/GeneralUser-GS/GeneralUser-GS.sf2 /Users/kabdellah/dev/chordbook/public/soundfonts/GeneralUser-GS.sf2)"
+      "Bash(cp /Users/kabdellah/dev/chordbook/GeneralUser-GS/GeneralUser-GS.sf2 /Users/kabdellah/dev/chordbook/public/soundfonts/GeneralUser-GS.sf2)",
+      "WebFetch(domain:alphatab.net)",
+      "Bash(ls /Users/kabdellah/dev/chordbook/*.gp*)",
+      "Bash(xxd /Users/kabdellah/dev/chordbook/QueenBestFriend.gp4)",
+      "Bash(xxd '/Users/kabdellah/Music/tabs/Queen - Youre My Best Friend.gp4')",
+      "Bash(xxd '/Users/kabdellah/Music/tabs/Chet Baker - My Funny Valentine \\(ver 2 by azerty81\\).gpx')",
+      "Bash(xxd '/Users/kabdellah/Music/tabs/Bloc Party - Banquet \\(ver 2 by potsironga\\).gp5')",
+      "Bash(xxd '/Users/kabdellah/Music/tabs/Coheed and Cambria - The Willing Well I Fuel For The Feeding End \\(ver 3 by wisew\\).gp')",
+      "Bash(mkdir -p /tmp/gp_inspect)",
+      "Bash(cp '/Users/kabdellah/Music/tabs/Coheed and Cambria - The Willing Well I Fuel For The Feeding End \\(ver 3 by wisew\\).gp' /tmp/gp_inspect/test.zip)",
+      "Read(//tmp/**)",
+      "Bash(unzip -o test.zip -d extracted)",
+      "Read(//private/tmp/gp_inspect/extracted/**)",
+      "Read(//private/tmp/gp_inspect/extracted/Content/**)"
     ]
   }
 }

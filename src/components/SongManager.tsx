@@ -4,7 +4,9 @@ import { EditableText } from './EditableText';
 import { DEFAULT_TUNING } from '../lib/tunings';
 import PDFExportDialog from './PDFExportDialog';
 import FretboardDiagram from './FretboardDiagram';
+import TuningSelector from './TuningSelector';
 import { getUniqueNotesFromSong } from '../lib/songAnalysis';
+import type { Tuning, CapoSettings } from '../lib/tunings';
 
 interface SongManagerProps {
   songs: Song[];
@@ -14,6 +16,10 @@ interface SongManagerProps {
   onRenameSong: (songId: string, newName: string) => void;
   onDeleteSong: (songId: string) => void;
   onBackToOverview: () => void;
+  currentTuning?: Tuning;
+  onTuningChange?: (tuning: Tuning) => void;
+  capoSettings?: CapoSettings;
+  onCapoChange?: (settings: CapoSettings) => void;
 }
 
 export default function SongManager({
@@ -23,7 +29,11 @@ export default function SongManager({
   onCreateSong,
   onRenameSong,
   onDeleteSong,
-  onBackToOverview
+  onBackToOverview,
+  currentTuning,
+  onTuningChange,
+  capoSettings,
+  onCapoChange,
 }: SongManagerProps) {
   const [showNewSongForm, setShowNewSongForm] = useState(false);
   const [newSongName, setNewSongName] = useState('');
@@ -137,11 +147,17 @@ export default function SongManager({
             <span className="song-header__meta-item">
               {currentSong.progressions.length} prog{currentSong.progressions.length !== 1 ? 's' : ''}
             </span>
-            <span className="song-header__meta-sep" />
-            <span className="song-header__meta-item">
-              {currentSong.bpm || 120} BPM
-            </span>
           </div>
+
+          {/* Tuning & Capo */}
+          {currentTuning && onTuningChange && capoSettings && onCapoChange && (
+            <TuningSelector
+              currentTuning={currentTuning}
+              onTuningChange={onTuningChange}
+              capoSettings={capoSettings}
+              onCapoChange={onCapoChange}
+            />
+          )}
 
           {/* Right: actions */}
           <div className="song-header__actions">
