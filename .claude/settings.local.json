@@ -34,7 +34,10 @@
       "Read(//tmp/**)",
       "Bash(unzip -o test.zip -d extracted)",
       "Read(//private/tmp/gp_inspect/extracted/**)",
-      "Read(//private/tmp/gp_inspect/extracted/Content/**)"
+      "Read(//private/tmp/gp_inspect/extracted/Content/**)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('plugins',{}\\), indent=2\\)\\)\")",
+      "Bash(npm run:*)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

@@ -150,10 +150,10 @@ function buildContext(tonic: string, type: 'major' | 'minor'): HarmonicContext {
       detectedKey: `${tonic} major`,
       keyTonic: tonic,
       keyType: 'major',
-      scale: key.scale,
-      diatonicChords: key.chords,
-      chordsHarmonicFunction: key.chordsHarmonicFunction,
-      grades: key.grades,
+      scale: [...key.scale],
+      diatonicChords: [...key.chords],
+      chordsHarmonicFunction: [...key.chordsHarmonicFunction],
+      grades: [...key.grades],
     };
   } else {
     const key = Key.minorKey(tonic);
@@ -161,8 +161,8 @@ function buildContext(tonic: string, type: 'major' | 'minor'): HarmonicContext {
       detectedKey: `${tonic} minor`,
       keyTonic: tonic,
       keyType: 'minor',
-      scale: key.natural.scale,
-      diatonicChords: key.natural.chords,
+      scale: [...key.natural.scale],
+      diatonicChords: [...key.natural.chords],
       chordsHarmonicFunction: ['T', 'SD', 'T', 'SD', 'D', 'SD', 'D'],
       grades: ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'],
     };
@@ -287,7 +287,7 @@ function getHarmonicFunction(
   }
 }
 
-function classifyCoreTones(chordNotes: string[], root: string): NoteClassification[] {
+function classifyCoreTones(chordNotes: string[], _root: string): NoteClassification[] {
   const roles: Array<'root' | '3rd' | '5th' | '7th'> = ['root', '3rd', '5th', '7th'];
   return chordNotes.slice(0, 4).map((note, i) => ({
     note,
@@ -344,7 +344,7 @@ function findSusVariants(root: string): string[] {
     });
 }
 
-function findSubstitutions(chordName: string, root: string, context: HarmonicContext): string[] {
+function findSubstitutions(chordName: string, root: string, _context: HarmonicContext): string[] {
   const subs: string[] = [];
   const chordInfo = Chord.get(chordName);
   if (!chordInfo.notes || chordInfo.notes.length === 0) return subs;

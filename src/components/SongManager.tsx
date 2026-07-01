@@ -5,6 +5,8 @@ import { DEFAULT_TUNING } from '../lib/tunings';
 import PDFExportDialog from './PDFExportDialog';
 import FretboardDiagram from './FretboardDiagram';
 import TuningSelector from './TuningSelector';
+import GPImportModal from './GPImportModal';
+import type { ImportedProgression, ImportedLead } from './GPImportModal';
 import { getUniqueNotesFromSong } from '../lib/songAnalysis';
 import type { Tuning, CapoSettings } from '../lib/tunings';
 
@@ -20,6 +22,7 @@ interface SongManagerProps {
   onTuningChange?: (tuning: Tuning) => void;
   capoSettings?: CapoSettings;
   onCapoChange?: (settings: CapoSettings) => void;
+  onImportGP?: (progressions: ImportedProgression[], leads: ImportedLead[]) => void;
 }
 
 export default function SongManager({
@@ -34,6 +37,7 @@ export default function SongManager({
   onTuningChange,
   capoSettings,
   onCapoChange,
+  onImportGP,
 }: SongManagerProps) {
   const [showNewSongForm, setShowNewSongForm] = useState(false);
   const [newSongName, setNewSongName] = useState('');
@@ -41,6 +45,7 @@ export default function SongManager({
   const [showPDFExport, setShowPDFExport] = useState(false);
   const [showAllSongs, setShowAllSongs] = useState(false);
   const [showScaleFlyout, setShowScaleFlyout] = useState(false);
+  const [showGPImport, setShowGPImport] = useState(false);
 
   const sortedSongs = [...songs].sort((a, b) => {
     const aLast = a.lastOpened?.getTime() || 0;
@@ -185,6 +190,17 @@ export default function SongManager({
                 <circle cx="14.25" cy="14" r="1.2" fill="currentColor" stroke="none" />
               </svg>
             </button>
+            {onImportGP && (
+              <button
+                onClick={() => setShowGPImport(true)}
+                className="song-header__action-btn"
+                title="Import Guitar Pro tab"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+              </button>
+            )}
             <button
               onClick={() => setShowPDFExport(true)}
               className="song-header__action-btn"
@@ -253,6 +269,14 @@ export default function SongManager({
           isOpen={showPDFExport}
           onClose={() => setShowPDFExport(false)}
         />
+
+        {showGPImport && onImportGP && (
+          <GPImportModal
+            onImport={(progs, leads) => { onImportGP(progs, leads); setShowGPImport(false); }}
+            onClose={() => setShowGPImport(false)}
+            currentTuningId={(currentTuning || DEFAULT_TUNING).id}
+          />
+        )}
       </div>
     );
   }

@@ -5,6 +5,7 @@ import type { Song, TimeSignature, ChordPairing } from './types/song';
 import type { ChordVoicing } from './types/chord';
 import type { Lead } from './types/lead';
 import type { LeadNote } from './types/lead';
+import type { ImportedProgression, ImportedLead } from './components/GPImportModal';
 import { DEFAULT_TUNING, type Tuning, type CapoSettings } from './lib/tunings';
 import {
   saveSongs,
@@ -499,11 +500,52 @@ function App() {
     });
   }
 
+  async function handleImportGP(importedProgressions: ImportedProgression[], importedLeads: ImportedLead[]) {
+    if (!currentSongId) return;
+    const now = new Date();
+
+    // Create progressions with chords
+    const newProgressions = importedProgressions.map(ip => ({
+      id: generateProgressionId(),
+      name: ip.name,
+      chords: ip.chords.map(c => ({
+        name: c.name,
+        notes: c.notes,
+        voicing: c.voicing,
+      })),
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    if (newProgressions.length > 0) {
+      setSongs(prevSongs => {
+        const updated = prevSongs.map(song => {
+          if (song.id === currentSongId) {
+            return { ...song, progressions: [...song.progressions, ...newProgressions], updatedAt: now };
+          }
+          return song;
+        });
+        saveSongs(updated);
+        return updated;
+      });
+    }
+
+    // Create leads
+    for (const il of importedLeads) {
+      await handleCreateLead(il.name, il.notes, il.tuningId);
+    }
+  }
+
   async function handleAddChord(progressionId: string, chordName: string) {
     if (!currentSongId) return;
     const notes = getNotesForChord(chordName);
     // Check for saved voicings matching these notes + current tuning (use most recent)
-    const saved = await findVoicingsForNotes(notes, currentTuning.id);
+    let saved = await findVoicingsForNotes(notes, currentTuning.id);
+    // Fallback: match by chord name prefix if notes didn't match
+    if (saved.length === 0) {
+      const allForTuning = await getSavedVoicings(currentTuning.id);
+      saved = allForTuning.filter(v => v.name.replace(/\s+\d+$/, '') === chordName);
+    }
     const latest = saved.length > 0
       ? saved.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]
       : null;
@@ -793,6 +835,7 @@ function App() {
                 onTuningChange={handleTuningChange}
                 capoSettings={capoSettings}
                 onCapoChange={handleCapoChange}
+                onImportGP={handleImportGP}
               />
             </div>
           </div>

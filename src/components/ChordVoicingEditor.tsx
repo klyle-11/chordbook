@@ -164,12 +164,6 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
     }
   }
 
-  // Fill all suggestions at once
-  function fillAllSuggestions() {
-    const newFrets = frets.map((f, i) => f !== null ? f : (suggestions[i]?.fret ?? null));
-    setFrets(newFrets);
-  }
-
   function toggleMute(index: number) {
     const newFrets = [...frets];
     newFrets[index] = newFrets[index] === null ? 0 : null;
