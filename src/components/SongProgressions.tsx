@@ -3,7 +3,7 @@ import type { NamedProgression, ChordPairing, TimeSignature } from '../types/son
 import type { ChordVoicing } from '../types/chord';
 import type { Lead } from '../types/lead';
 import type { LeadNote } from '../types/lead';
-import type { Tuning, CapoSettings } from '../lib/tunings';
+import { getSoundingTuning, type Tuning, type CapoSettings } from '../lib/tunings';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -22,9 +22,9 @@ interface SortableProgressionItemProps {
   onEdit: (progressionId: string, field: 'name', value: string) => void;
   onDelete: (progressionId: string) => void;
   onChordReorder: (progressionId: string, oldIndex: number, newIndex: number) => void;
-  onChordReplace: (progressionId: string, chordIndex: number) => void;
+  onChordRename: (progressionId: string, chordIndex: number, name: string) => void;
   onChordRemove: (progressionId: string, chordIndex: number) => void;
-  onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) => void;
+  onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined, renameTo?: string) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
   onAddChordWithVoicing: (progressionId: string, name: string, notes: string[], voicing: ChordVoicing) => void;
   tuning: Tuning;
@@ -43,7 +43,7 @@ function SortableProgressionItem({
   onEdit,
   onDelete,
   onChordReorder,
-  onChordReplace,
+  onChordRename,
   onChordRemove,
   onUpdateChordVoicing,
   onAddChord,
@@ -167,7 +167,7 @@ function SortableProgressionItem({
           </div>
         ) : (
           <AddChordPanel
-            tuning={tuning}
+            tuning={getSoundingTuning(tuning, capoSettings)}
             onAddChord={async (chordName) => { await onAddChord(progression.id, chordName); setShowAddChord(false); }}
             onAddVoicing={(name, notes, voicing) => { onAddChordWithVoicing(progression.id, name, notes, voicing); setShowAddChord(false); }}
             onClose={() => setShowAddChord(false)}
@@ -176,13 +176,14 @@ function SortableProgressionItem({
 
         {/* Chord Grid */}
         <SortableChordGrid
+          ownerId={progression.id}
           progression={progression.chords}
           tuning={tuning}
           capoSettings={capoSettings}
           onReorder={(oldIndex, newIndex) => onChordReorder(progression.id, oldIndex, newIndex)}
-          onReplace={(index) => onChordReplace(progression.id, index)}
+          onRename={(index, name) => onChordRename(progression.id, index, name)}
           onRemove={(index) => onChordRemove(progression.id, index)}
-          onUpdateVoicing={(index, voicing) => onUpdateChordVoicing(progression.id, index, voicing)}
+          onUpdateVoicing={(index, voicing, renameTo) => onUpdateChordVoicing(progression.id, index, voicing, renameTo)}
           activeLeadNotes={activeLeadNotes}
           bpm={progression.bpm || bpm}
           beatsPerMeasure={beatsPerMeasure}
@@ -229,9 +230,9 @@ interface SongProgressionsProps {
   onUpdateProgressionBpm: (progressionId: string, bpm: number) => void;
   onDeleteProgression: (progressionId: string) => void;
   onChordReorder: (progressionId: string, oldIndex: number, newIndex: number) => void;
-  onChordReplace: (progressionId: string, chordIndex: number) => void;
+  onChordRename: (progressionId: string, chordIndex: number, name: string) => void;
   onChordRemove: (progressionId: string, chordIndex: number) => void;
-  onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) => void;
+  onUpdateChordVoicing: (progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined, renameTo?: string) => void;
   onAddChord: (progressionId: string, chordName: string) => void;
   onAddChordWithVoicing: (progressionId: string, name: string, notes: string[], voicing: ChordVoicing) => void;
   onUpdateChordBeats: (progressionId: string, chordIndex: number, beats: number) => void;
@@ -267,7 +268,7 @@ export default function SongProgressions({
   onUpdateProgressionBpm: _onUpdateProgressionBpm,
   onDeleteProgression,
   onChordReorder,
-  onChordReplace,
+  onChordRename,
   onChordRemove,
   onUpdateChordVoicing,
   onAddChord,
@@ -633,7 +634,7 @@ export default function SongProgressions({
                 onEdit={onEditProgression}
                 onDelete={onDeleteProgression}
                 onChordReorder={onChordReorder}
-                onChordReplace={onChordReplace}
+                onChordRename={onChordRename}
                 onChordRemove={onChordRemove}
                 onUpdateChordVoicing={onUpdateChordVoicing}
                 onAddChord={onAddChord}

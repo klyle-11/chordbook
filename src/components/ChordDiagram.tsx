@@ -1,17 +1,11 @@
 import { useState } from 'react';
-import { Chord } from '@tonaljs/tonal';
 import type { Tuning } from '../lib/tunings';
 import type { ChordVoicing } from '../types/chord';
-import { getTuningStrings, getTuningData } from '../lib/tunings';
+import { getTuningStrings } from '../lib/tunings';
 import { audioPlayer } from '../lib/audioPlayer';
-
-const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-function getNoteAtFret(openNote: string, fret: number): string {
-  const idx = CHROMATIC.indexOf(openNote);
-  if (idx === -1) return '?';
-  return CHROMATIC[(idx + fret) % 12];
-}
+import { getNoteAtFret, pitchClass } from '../lib/fretUtils';
+import { getDefaultVoicing } from '../lib/defaultVoicings';
+import { getNotesForChord } from '../lib/chordUtils';
 
 interface ChordDiagramProps {
   chordName: string;
@@ -70,20 +64,6 @@ interface ChordPosition {
   finger?: number;
 }
 
-function getKnownChordPattern(chordName: string): { positions: ChordPosition[]; startFret: number; capo?: number } | null {
-  const knownPatterns: Record<string, { positions: ChordPosition[]; startFret: number; capo?: number }> = {
-    'C6': { positions: [{ fret: 0 }, { fret: 1, finger: 1 }, { fret: 2, finger: 2 }, { fret: 2, finger: 3 }, { fret: 3, finger: 4 }, { fret: 'x' }], startFret: 0 },
-    'Cmaj7': { positions: [{ fret: 0 }, { fret: 0 }, { fret: 0 }, { fret: 2, finger: 2 }, { fret: 3, finger: 3 }, { fret: 'x' }], startFret: 0 },
-    'Amaj7': { positions: [{ fret: 0 }, { fret: 2, finger: 2 }, { fret: 1, finger: 1 }, { fret: 2, finger: 3 }, { fret: 0 }, { fret: 'x' }], startFret: 0 },
-    'Dmaj7': { positions: [{ fret: 2, finger: 1 }, { fret: 2, finger: 2 }, { fret: 2, finger: 3 }, { fret: 0 }, { fret: 'x' }, { fret: 'x' }], startFret: 0 },
-    'Emaj7': { positions: [{ fret: 0 }, { fret: 0 }, { fret: 1, finger: 1 }, { fret: 1, finger: 2 }, { fret: 2, finger: 3 }, { fret: 0 }], startFret: 0 },
-    'Gmaj7': { positions: [{ fret: 2, finger: 1 }, { fret: 0 }, { fret: 0 }, { fret: 0 }, { fret: 'x' }, { fret: 3, finger: 2 }], startFret: 0 },
-    'Am6': { positions: [{ fret: 0 }, { fret: 1, finger: 1 }, { fret: 2, finger: 3 }, { fret: 2, finger: 2 }, { fret: 0 }, { fret: 'x' }], startFret: 0 },
-    'Dm6': { positions: [{ fret: 1, finger: 1 }, { fret: 0 }, { fret: 2, finger: 2 }, { fret: 0 }, { fret: 'x' }, { fret: 'x' }], startFret: 0 },
-  };
-  return knownPatterns[chordName] || null;
-}
-
 function assignFingerNumbers(positions: ChordPosition[]): ChordPosition[] {
   const result = [...positions];
   const fretted = result
@@ -111,55 +91,65 @@ function assignFingerNumbers(positions: ChordPosition[]): ChordPosition[] {
   return result;
 }
 
-export function calculateChordFingering(chordName: string, tuning: Tuning): { positions: ChordPosition[]; startFret: number; capo?: number } | null {
-  const chord = Chord.get(chordName);
-  if (!chord.notes || chord.notes.length === 0) return null;
+type Fingering = { positions: ChordPosition[]; startFret: number; capo?: number };
 
-  if (tuning.id === 'standard') {
-    const known = getKnownChordPattern(chordName);
-    if (known) return known;
-  }
+// Fingering is recomputed on every card render; cache per chord + tuning.
+const fingeringCache = new Map<string, Fingering | null>();
 
-  const tuningData = getTuningData(tuning);
-  const chordNotes = chord.notes;
-  const noteToSemitone: Record<string, number> = {
-    'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4,
-    'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11,
+/**
+ * Diagram shape for a chord: the common default voicing when one is known
+ * (lib/defaultVoicings), otherwise a generic 4-fret-window search.
+ * Pass the capo-applied (sounding) tuning; frets are relative to the capo.
+ */
+export function calculateChordFingering(chordName: string, tuning: Tuning): Fingering | null {
+  const notes = getNotesForChord(chordName);
+  if (notes.length === 0) return null;
+
+  const cacheKey = `${chordName}|${notes.join(',')}|${tuning.strings.map(s => s.note + s.octave).join(',')}`;
+  if (fingeringCache.has(cacheKey)) return fingeringCache.get(cacheKey)!;
+  const result = defaultFingering(chordName, tuning) ?? searchFingering(notes, tuning);
+  fingeringCache.set(cacheKey, result);
+  return result;
+}
+
+function defaultFingering(chordName: string, tuning: Tuning): Fingering | null {
+  const frets = getDefaultVoicing(chordName, tuning);
+  if (!frets) return null;
+  const fretted = frets.filter((f): f is number => f !== null && f > 0);
+  const startFret = fretted.length === 0 || Math.max(...fretted) <= 3 ? 0 : Math.min(...fretted);
+  return {
+    positions: assignFingerNumbers(frets.map(f => ({ fret: f === null ? 'x' : f }))),
+    startFret,
   };
+}
 
-  const getNoteSemitones = (name: string) => {
-    const base = noteToSemitone[name];
-    return base === undefined ? [] : [base, base + 12, base + 24, base + 36];
-  };
-
-  const stringBases = tuningData.map(s => noteToSemitone[s.note] + s.octave * 12);
+function searchFingering(notes: string[], tuning: Tuning): Fingering | null {
+  // Pitch classes, so tonal spellings like E#, B#, F## still match
+  const chordPcs = new Set(notes.map(pitchClass));
+  const stringPcs = tuning.displayStrings.map(pitchClass);
 
   for (const startFret of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
     const positions: ChordPosition[] = [];
     let toneCount = 0;
 
-    for (let si = 0; si < stringBases.length; si++) {
+    for (let si = 0; si < stringPcs.length; si++) {
       let bestFret: number | 'x' = 'x';
       let found = false;
 
       for (let f = startFret; f <= startFret + 3; f++) {
-        const semitone = stringBases[si] + f;
-        if (chordNotes.some(cn => getNoteSemitones(cn).some(s => s % 12 === semitone % 12))) {
+        if (chordPcs.has((stringPcs[si] + f) % 12)) {
           bestFret = f; found = true; toneCount++; break;
         }
       }
 
-      if (!found && startFret === 0) {
-        const open = stringBases[si];
-        if (chordNotes.some(cn => getNoteSemitones(cn).some(s => s % 12 === open % 12))) {
-          bestFret = 0; toneCount++;
-        }
+      if (!found && startFret === 0 && chordPcs.has(stringPcs[si])) {
+        bestFret = 0; toneCount++;
       }
       positions.push({ fret: bestFret });
     }
 
     const active = positions.filter(p => p.fret !== 'x').length;
-    if (toneCount >= Math.min(3, chordNotes.length) && active >= 3) {
+    if (toneCount >= Math.min(3, chordPcs.size) && active >= 3) {
       const withFingers = assignFingerNumbers(positions);
       const fretted = withFingers.filter(p => typeof p.fret === 'number' && (p.fret as number) > 0);
       const uniqueFrets = [...new Set(fretted.map(p => p.fret))];
@@ -195,7 +185,7 @@ function DotView({ chordName, tuning, activeLeadNotes }: { chordName: string; tu
           {startFret === 1 ? '1st fret' : `${startFret}${getOrdinalSuffix(startFret)} fret`}
         </div>
       )}
-      {capo && <div className="text-center text-xs text-orange-600 font-semibold mb-1">Capo {capo}</div>}
+      {capo && <div className="text-center text-xs text-orange-600 font-semibold mb-1">Barre {capo}</div>}
       <div className="relative flex">
         <div className="flex flex-col justify-between text-xs text-gray-600 mr-2 h-24">
           {strings.map((s, i) => <span key={i} className="h-6 flex items-center">{s}</span>)}

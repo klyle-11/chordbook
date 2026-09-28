@@ -6,6 +6,13 @@ export interface TimeSignature {
   beatUnit: number;        // denominator, e.g. 4
 }
 
+/** External reference for a song: tab, notation, video, lyrics… */
+export interface SongLink {
+  id: string;
+  url: string;   // http(s) only — validated on entry
+  label?: string; // falls back to the hostname
+}
+
 export interface ChordPairing {
   id: string;
   name: string;
@@ -33,6 +40,7 @@ export interface Song {
   timeSignature?: TimeSignature;
   pairings?: ChordPairing[];
   leadIds?: string[];
+  links?: SongLink[];
   createdAt: Date;
   updatedAt: Date;
   lastOpened?: Date; // Track when song was last opened

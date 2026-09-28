@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import type { Tuning } from '../lib/tunings';
-import { getNotesFromVoicing, getFretsForNoteOnString } from '../lib/fretUtils';
+import { getNotesFromVoicing, getFretsForNoteOnString, normalizeNote, pitchClass } from '../lib/fretUtils';
 import { saveVoicing } from '../lib/savedVoicingLibrary';
+import { suggestRenameForTab } from '../lib/chordUtils';
 
 export interface ChordVoicingEditorRef {
   setFretForString: (stringIndex: number, fret: number) => void;
@@ -12,30 +13,16 @@ interface ChordVoicingEditorProps {
   initialFrets?: (number | null)[];
   chordName?: string;
   chordNotes?: string[];
-  onApply: (frets: (number | null)[]) => void;
+  /** renameTo is set when the tab no longer matches the chord name and the user accepted a new name */
+  onApply: (frets: (number | null)[], renameTo?: string) => void;
   onCancel: () => void;
 }
 
-const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-// Map for flat → sharp equivalents
-const FLAT_TO_SHARP: Record<string, string> = {
-  'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B',
-  'D♭': 'C#', 'E♭': 'D#', 'F♭': 'E', 'G♭': 'F#', 'A♭': 'G#', 'B♭': 'A#', 'C♭': 'B',
-};
-
+/** Parse a typed note name ("c", "Eb", "f#", "B♭") into sharp spelling, or null. */
 function parseNoteInput(raw: string): string | null {
   const trimmed = raw.trim();
-  if (!trimmed) return null;
-  // Capitalize first letter, keep the rest
-  const normalized = trimmed[0].toUpperCase() + trimmed.slice(1).toLowerCase();
-  // Check flat alias
-  if (FLAT_TO_SHARP[normalized]) return FLAT_TO_SHARP[normalized];
-  // Check direct chromatic match
-  if (CHROMATIC.includes(normalized)) return normalized;
-  // Try just the first letter (e.g., user typed "c" → "C")
-  const letter = trimmed[0].toUpperCase();
-  if (CHROMATIC.includes(letter) && trimmed.length === 1) return letter;
-  return null;
+  if (!/^[a-gA-G][#♯b♭]?$/.test(trimmed)) return null;
+  return normalizeNote(trimmed[0].toUpperCase() + trimmed.slice(1));
 }
 
 const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorProps>(({
@@ -71,14 +58,19 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
     },
   }));
 
-  // Reset frets when tuning changes
+  // Reset when switching to an instrument with a different string count
   useEffect(() => {
-    if (!initialFrets || initialFrets.length !== stringCount) {
-      setFrets(Array(stringCount).fill(null));
-    }
-  }, [tuning.id, stringCount, initialFrets]);
+    setFrets(prev => (prev.length === stringCount ? prev : Array(stringCount).fill(null)));
+  }, [stringCount]);
 
   const derivedNotes = getNotesFromVoicing(tuning, frets);
+
+  // Tab notes that aren't in the chord → offer to rename the chord to what the tab plays
+  const rename = suggestRenameForTab(chordNotes ?? [], derivedNotes);
+  const suggestedName = rename?.suggestedName ?? null;
+  const outsideNotes = rename?.outsideNotes ?? [];
+  const [renameAccepted, setRenameAccepted] = useState(true);
+  const renameTo = suggestedName && renameAccepted ? suggestedName : undefined;
 
   // Compute suggested fret per string from chord notes (used as placeholder + Tab fill)
   const suggestions = tuning.displayStrings.map((stringName, _i) => {
@@ -87,10 +79,9 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
     let bestFret: number | null = null;
     let bestNote: string | null = null;
     for (const note of chordNotes) {
-      // Normalize flats
-      const normalized = FLAT_TO_SHARP[note] || (CHROMATIC.includes(note) ? note : null);
-      if (!normalized) continue;
-      const possibleFrets = getFretsForNoteOnString(stringName, normalized).filter(f => f <= 12);
+      if (pitchClass(note) === -1) continue;
+      const normalized = normalizeNote(note);
+      const possibleFrets = getFretsForNoteOnString(stringName, normalized, 12);
       if (possibleFrets.length > 0 && (bestFret === null || possibleFrets[0] < bestFret)) {
         bestFret = possibleFrets[0];
         bestNote = normalized;
@@ -159,7 +150,7 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (frets.some(f => f !== null)) {
-        onApply(frets);
+        onApply(frets, renameTo);
       }
     }
   }
@@ -183,7 +174,7 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
     setShowSaveForm(false);
     setSaveName('');
     // Also apply the voicing immediately
-    onApply(frets);
+    onApply(frets, renameTo);
   }
 
   const hasAnyFret = frets.some(f => f !== null);
@@ -280,10 +271,26 @@ const ChordVoicingEditor = forwardRef<ChordVoicingEditorRef, ChordVoicingEditorP
         </div>
       )}
 
+      {/* Tab no longer matches the chord name */}
+      {suggestedName && (
+        <label className="mt-2 flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+          <input
+            type="checkbox"
+            checked={renameAccepted}
+            onChange={e => setRenameAccepted(e.target.checked)}
+            style={{ accentColor: 'var(--accent)' }}
+          />
+          <span>
+            Tab plays {outsideNotes.join(', ')} (not in {chordName}). Rename to{' '}
+            <strong style={{ color: 'var(--text)' }}>{suggestedName}</strong>
+          </span>
+        </label>
+      )}
+
       {/* Action buttons */}
       <div className="flex gap-2 mt-4 flex-wrap">
         <button
-          onClick={() => onApply(frets)}
+          onClick={() => onApply(frets, renameTo)}
           disabled={!hasAnyFret}
           className="px-3 py-1.5 text-sm rounded transition-colors"
           style={{

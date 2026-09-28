@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import type { Song } from '../types/song';
+import type { Song, SongLink } from '../types/song';
 import { EditableText } from './EditableText';
 import { DEFAULT_TUNING } from '../lib/tunings';
 import PDFExportDialog from './PDFExportDialog';
 import FretboardDiagram from './FretboardDiagram';
 import TuningSelector from './TuningSelector';
 import GPImportModal from './GPImportModal';
+import SongLinks from './SongLinks';
 import type { ImportedProgression, ImportedLead } from './GPImportModal';
 import { getUniqueNotesFromSong } from '../lib/songAnalysis';
 import type { Tuning, CapoSettings } from '../lib/tunings';
@@ -23,6 +24,7 @@ interface SongManagerProps {
   capoSettings?: CapoSettings;
   onCapoChange?: (settings: CapoSettings) => void;
   onImportGP?: (progressions: ImportedProgression[], leads: ImportedLead[]) => void;
+  onLinksChange?: (songId: string, links: SongLink[]) => void;
 }
 
 export default function SongManager({
@@ -38,6 +40,7 @@ export default function SongManager({
   capoSettings,
   onCapoChange,
   onImportGP,
+  onLinksChange,
 }: SongManagerProps) {
   const [showNewSongForm, setShowNewSongForm] = useState(false);
   const [newSongName, setNewSongName] = useState('');
@@ -145,6 +148,13 @@ export default function SongManager({
               className="song-header__title"
               placeholder="Song name..."
             />
+            {/* Tab / notation links */}
+            {onLinksChange && (
+              <SongLinks
+                links={currentSong.links || []}
+                onChange={(links) => onLinksChange(currentSong.id, links)}
+              />
+            )}
           </div>
 
           {/* Center: meta info */}

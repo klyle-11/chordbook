@@ -15,22 +15,17 @@ import {
 } from '@dnd-kit/sortable';
 import type { Chord, ChordVoicing } from '../types/chord';
 import type { Tuning, CapoSettings } from '../lib/tunings';
-import { getTuningStrings } from '../lib/tunings';
+import { getTuningStrings, getSoundingTuning } from '../lib/tunings';
+import { getNoteAtFret } from '../lib/fretUtils';
 import { audioPlayer } from '../lib/audioPlayer';
 import type { ChordAnalysis, HarmonicContext } from '../lib/harmonicAnalysis';
 import DraggableChordCard from './DraggableChordCard';
-import FretboardDiagram from './FretboardDiagram';
 import ChordVoicingEditor, { type ChordVoicingEditorRef } from './ChordVoicingEditor';
+import QuickTabEditor from './QuickTabEditor';
 import { calculateChordFingering } from './ChordDiagram';
 import { getNotesForChord, isValidChord } from '../lib/chordUtils';
-
-const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-function getNoteAtFret(openNote: string, fret: number): string {
-  const idx = CHROMATIC.indexOf(openNote);
-  if (idx === -1) return '?';
-  return CHROMATIC[(idx + fret) % 12];
-}
+import { EditableText } from './EditableText';
+import { useFretboardFocus } from '../lib/fretboardFocus';
 
 function strumChordFrets(frets: (number | null)[], tuning: Tuning) {
   const strings = getTuningStrings(tuning);
@@ -57,25 +52,28 @@ interface SortableChordGridProps {
   tuning: Tuning;
   capoSettings: CapoSettings;
   onReorder: (oldIndex: number, newIndex: number) => void;
-  onReplace: (index: number) => void;
   onRemove: (index: number) => void;
-  onUpdateVoicing?: (index: number, voicing: ChordVoicing | undefined) => void;
+  onUpdateVoicing?: (index: number, voicing: ChordVoicing | undefined, renameTo?: string) => void;
+  onRename?: (index: number, name: string) => void;
   activeLeadNotes?: string[];
   bpm: number;
   beatsPerMeasure: number;
   nextProgressionFirstChord?: Chord;
   chordAnalyses?: ChordAnalysis[];
   harmonicContext?: HarmonicContext;
+  /** Progression id — identifies this grid as owner of the header fretboard focus */
+  ownerId: string;
 }
 
 export default function SortableChordGrid({
+  ownerId,
   progression,
   tuning,
   capoSettings,
   onReorder,
-  onReplace: _onReplace,
   onRemove,
   onUpdateVoicing,
+  onRename,
   activeLeadNotes,
   bpm,
   beatsPerMeasure,
@@ -85,11 +83,14 @@ export default function SortableChordGrid({
 }: SortableChordGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [showVoicingEditor, setShowVoicingEditor] = useState(false);
+  const [quickEditIndex, setQuickEditIndex] = useState<number | null>(null);
   const [showNextChord, setShowNextChord] = useState(true);
   const [anticipateNextProgression, setAnticipateNextProgression] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const voicingEditorRef = useRef<ChordVoicingEditorRef>(null);
+  // Voicings, tab and shapes are relative to the capo; only FretboardDiagram needs the raw tuning
+  const soundingTuning = getSoundingTuning(tuning, capoSettings);
 
   // Calculate ms per chord: each chord lasts its beats (or beatsPerMeasure) at the current BPM
   const getMsPerChord = useCallback((chordIndex: number) => {
@@ -107,16 +108,8 @@ export default function SortableChordGrid({
 
     // Strum the current chord using voicing or computed fingering
     const chord = progression[currentIdx];
-    let frets: (number | null)[] | undefined;
-    if (chord.voicing?.tuningId === tuning.id) {
-      frets = chord.voicing.frets;
-    } else {
-      const fingering = calculateChordFingering(chord.name, tuning);
-      if (fingering) {
-        frets = fingering.positions.map(p => typeof p.fret === 'number' ? p.fret : null);
-      }
-    }
-    if (frets) strumChordFrets(frets, tuning);
+    const frets = getVoicingFrets(chord);
+    if (frets) strumChordFrets(frets, soundingTuning);
 
     // Schedule advance to next chord
     const ms = getMsPerChord(currentIdx);
@@ -128,7 +121,8 @@ export default function SortableChordGrid({
     return () => {
       if (playTimerRef.current) clearTimeout(playTimerRef.current);
     };
-  }, [isPlaying, selectedIndex, progression, tuning, getMsPerChord]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getVoicingFrets only depends on soundingTuning
+  }, [isPlaying, selectedIndex, progression, soundingTuning.name, getMsPerChord]);
 
   const togglePlayback = () => {
     if (isPlaying) {
@@ -187,11 +181,52 @@ export default function SortableChordGrid({
     }
   };
 
-  const handleFretClick = showVoicingEditor
-    ? (stringIndex: number, fret: number, _note: string) => {
-        voicingEditorRef.current?.setFretForString(stringIndex, fret);
-      }
-    : undefined;
+  // Quick tab editor over a chord already in the progression
+  const handleEditVoicing = (index: number) => {
+    stopPlayback();
+    setShowVoicingEditor(false);
+    setQuickEditIndex(index);
+  };
+
+  // "More…" from the quick editor → full editor in the fretboard panel
+  const openFullEditor = (index: number) => {
+    setQuickEditIndex(null);
+    setSelectedIndex(index);
+    setShowVoicingEditor(true);
+  };
+
+  const renderQuickEditor = (chord: Chord, index: number) => quickEditIndex === index ? (
+    <QuickTabEditor
+      tuning={soundingTuning}
+      chordName={chord.name}
+      chordNotes={getFullChordNotes(chord)}
+      initialFrets={getVoicingFrets(chord)}
+      onApply={(frets, renameTo) => {
+        onUpdateVoicing?.(index, { frets, tuningId: tuning.id }, renameTo);
+        setQuickEditIndex(null);
+      }}
+      onClose={() => setQuickEditIndex(null)}
+      onMore={() => openFullEditor(index)}
+    />
+  ) : undefined;
+
+  // Fretboard clicks (in the song header) fill the full editor while it's open
+  const fillFromFretboard = useCallback((stringIndex: number, fret: number) => {
+    voicingEditorRef.current?.setFretForString(stringIndex, fret);
+  }, []);
+
+  // ─── Song-header fretboard focus ───
+  const { focus, setFocus } = useFretboardFocus();
+  const focusOwner = focus?.ownerId;
+
+  // Another progression took the fretboard → drop our selection
+  useEffect(() => {
+    if (focusOwner && focusOwner !== ownerId) {
+      setIsPlaying(false);
+      setSelectedIndex(null);
+      setShowVoicingEditor(false);
+    }
+  }, [focusOwner, ownerId]);
 
   const items = progression.map((_, index) => `chord-${index}`);
   const selectedChord = selectedIndex !== null ? progression[selectedIndex] : null;
@@ -214,7 +249,7 @@ export default function SortableChordGrid({
     if (chord.voicing?.tuningId === tuning.id) {
       return chord.voicing.frets;
     }
-    const fingering = calculateChordFingering(chord.name, tuning);
+    const fingering = calculateChordFingering(chord.name, soundingTuning);
     if (fingering) {
       return fingering.positions.map(p => typeof p.fret === 'number' ? p.fret : null);
     }
@@ -230,6 +265,28 @@ export default function SortableChordGrid({
     return chord.notes;
   }
 
+  // Publish the selected / playing chord to the song-header fretboard
+  useEffect(() => {
+    if (!selectedChord || selectedIndex === null) {
+      setFocus(prev => (prev?.ownerId === ownerId ? null : prev));
+      return;
+    }
+    setFocus({
+      ownerId,
+      chordName: selectedChord.name,
+      chordNotes: getFullChordNotes(selectedChord),
+      voicingFrets: getVoicingFrets(selectedChord),
+      previewName: showNextChord && previewChord ? previewChord.name : undefined,
+      previewNotes: showNextChord && previewChord ? previewChord.notes : undefined,
+      onFretClick: showVoicingEditor ? fillFromFretboard : undefined,
+    });
+    // getVoicingFrets / getFullChordNotes only read soundingTuning and the chord
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerId, selectedChord, selectedIndex, previewChord, showNextChord, showVoicingEditor, soundingTuning.name, fillFromFretboard, setFocus]);
+
+  // Release the fretboard when this progression unmounts (deleted / song closed)
+  useEffect(() => () => setFocus(prev => (prev?.ownerId === ownerId ? null : prev)), [ownerId, setFocus]);
+
   return (
     <div>
       <DndContext
@@ -244,9 +301,11 @@ export default function SortableChordGrid({
                 key={`chord-${index}`}
                 chord={chord}
                 index={index}
-                tuning={tuning}
+                tuning={soundingTuning}
                 onRemove={onRemove}
                 onUpdateVoicing={onUpdateVoicing}
+                onEditVoicing={onUpdateVoicing ? handleEditVoicing : undefined}
+                quickEditor={renderQuickEditor(chord, index)}
                 activeLeadNotes={activeLeadNotes}
                 isSelected={selectedIndex === index}
                 onSelect={handleSelect}
@@ -258,10 +317,10 @@ export default function SortableChordGrid({
         </SortableContext>
       </DndContext>
 
-      {/* Shared fretboard panel for selected chord */}
-      {selectedChord && selectedIndex !== null && (
+      {/* Progression toolbar — the chord itself shows on the song fretboard in the header */}
+      {progression.length > 0 && (
         <div
-          className="mt-3 rounded-lg overflow-hidden transition-all"
+          className="mt-2 rounded-lg overflow-hidden transition-all"
           style={{ border: '1px solid var(--border)', background: 'var(--bg-secondary)' }}
         >
           {/* Panel header */}
@@ -288,18 +347,34 @@ export default function SortableChordGrid({
                   </svg>
                 )}
               </button>
-              <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
-                {selectedChord.name}
-              </span>
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                {getFullChordNotes(selectedChord).join(', ')}
-              </span>
+              {!selectedChord || selectedIndex === null ? (
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Click a chord or ▶ to show it on the fretboard
+                </span>
+              ) : onRename ? (
+                <EditableText
+                  value={selectedChord.name}
+                  onChange={(name) => { if (name.trim() && name !== selectedChord.name) onRename(selectedIndex, name.trim()); }}
+                  className="text-sm font-medium"
+                  placeholder="Chord name"
+                />
+              ) : (
+                <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+                  {selectedChord.name}
+                </span>
+              )}
+              {selectedChord && (
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {getFullChordNotes(selectedChord).join(', ')}
+                </span>
+              )}
               {isPlaying && (
                 <span className="text-xs" style={{ color: 'var(--accent)' }}>
                   {selectedIndex! + 1}/{progression.length}
                 </span>
               )}
             </div>
+            {selectedChord && selectedIndex !== null && (
             <div className="flex items-center gap-2">
               {/* Show next chord toggle */}
               {previewChord && (
@@ -364,38 +439,28 @@ export default function SortableChordGrid({
                 ✕
               </button>
             </div>
+            )}
           </div>
 
-          {/* Fretboard */}
           <div className="px-2 pb-2">
-            {showVoicingEditor && (
+            {showVoicingEditor && selectedChord && (
               <div className="text-xs text-center py-1" style={{ color: 'var(--accent)' }}>
-                Click a note on the fretboard to fill it into the editor below
+                Click notes on the fretboard above to fill the tab
               </div>
             )}
-            <div className="overflow-x-auto">
-              <FretboardDiagram
-                chordNotes={getFullChordNotes(selectedChord)}
-                tuning={tuning}
-                capoSettings={capoSettings}
-                onFretClick={handleFretClick}
-                activeLeadNotes={activeLeadNotes}
-                previewNotes={showNextChord && previewChord ? previewChord.notes : undefined}
-                voicingFrets={getVoicingFrets(selectedChord)}
-              />
-            </div>
 
             {/* Voicing editor */}
-            {showVoicingEditor && (
+            {showVoicingEditor && selectedChord && selectedIndex !== null && (
               <ChordVoicingEditor
+                key={selectedIndex}
                 ref={voicingEditorRef}
-                tuning={tuning}
-                initialFrets={selectedChord.voicing?.tuningId === tuning.id ? selectedChord.voicing.frets : undefined}
+                tuning={soundingTuning}
+                initialFrets={getVoicingFrets(selectedChord)}
                 chordName={selectedChord.name}
-                chordNotes={selectedChord.notes}
-                onApply={(frets) => {
+                chordNotes={getFullChordNotes(selectedChord)}
+                onApply={(frets, renameTo) => {
                   if (onUpdateVoicing) {
-                    onUpdateVoicing(selectedIndex, { frets, tuningId: tuning.id });
+                    onUpdateVoicing(selectedIndex, { frets, tuningId: tuning.id }, renameTo);
                   }
                   setShowVoicingEditor(false);
                 }}

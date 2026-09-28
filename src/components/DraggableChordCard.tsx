@@ -14,6 +14,9 @@ interface DraggableChordCardProps {
   tuning: Tuning;
   onRemove: (index: number) => void;
   onUpdateVoicing?: (index: number, voicing: ChordVoicing | undefined) => void;
+  onEditVoicing?: (index: number) => void;
+  /** Quick tab editor popover, rendered over this card while open */
+  quickEditor?: React.ReactNode;
   activeLeadNotes?: string[];
   isSelected?: boolean;
   onSelect?: (index: number) => void;
@@ -27,6 +30,8 @@ export default function DraggableChordCard({
   tuning,
   onRemove,
   onUpdateVoicing,
+  onEditVoicing,
+  quickEditor,
   activeLeadNotes,
   isSelected = false,
   onSelect,
@@ -84,7 +89,8 @@ export default function DraggableChordCard({
   }
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
+      {quickEditor}
       <div
         ref={setNodeRef}
         style={{
@@ -178,6 +184,20 @@ export default function DraggableChordCard({
               )}
             </div>
           )}
+          {onEditVoicing && (
+            <button
+              onClick={() => onEditVoicing(index)}
+              className="px-1 py-0.5 rounded transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              title="Edit tab / voicing"
+              aria-label={`Edit tab for ${chord.name}`}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={() => onRemove(index)}
             className="px-1 py-0.5 rounded transition-colors"
@@ -213,12 +233,17 @@ export default function DraggableChordCard({
       )}
 
       {/* Chord diagram (TAB when voicing exists, dot-style otherwise) */}
-      <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
+      <div
+        style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}
+        onDoubleClick={onEditVoicing ? (e) => { e.stopPropagation(); onEditVoicing(index); } : undefined}
+        title={onEditVoicing ? 'Double-click to edit tab' : undefined}
+      >
         <ChordDiagram
           chordName={chord.name}
           tuning={tuning}
           voicing={chord.voicing}
           activeLeadNotes={activeLeadNotes}
+          onRequestVoicingEditor={onEditVoicing ? () => onEditVoicing(index) : undefined}
         />
       </div>
 

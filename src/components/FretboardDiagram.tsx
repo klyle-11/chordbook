@@ -1,6 +1,6 @@
-import { getFretsForNoteOnString, normalizeNote } from "../lib/fretUtils";
+import { getFretsForNoteOnString, pitchClass } from "../lib/fretUtils";
 import { getFretPositions, getFretCenterPosition } from "../lib/fretPositions";
-import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable, applyCapo } from "../lib/tunings";
+import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable, getCapoFret, getSoundingTuning } from "../lib/tunings";
 import FretMarker from "./FretMarker";
 
 interface FretboardDiagramProps {
@@ -11,17 +11,26 @@ interface FretboardDiagramProps {
     activeLeadNotes?: string[];
     previewNotes?: string[];
     voicingFrets?: (number | null)[];
+    /** Hide the title and outer box (used in the song header) */
+    compact?: boolean;
 }
 
-export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick, activeLeadNotes, previewNotes, voicingFrets }: FretboardDiagramProps) {
-    const effectiveTuning = capoSettings.enabled && capoSettings.fret > 0
-        ? applyCapo(tuning, capoSettings.fret)
-        : tuning;
-    const strings = getTuningStrings(effectiveTuning);
+export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick, activeLeadNotes, previewNotes, voicingFrets, compact = false }: FretboardDiagramProps) {
+    // All fret numbers here (markers, voicingFrets, onFretClick) are relative to the capo,
+    // matching tab/voicing convention. Only drawing positions add the capo back.
+    const capoFret = getCapoFret(capoSettings);
+    const soundingTuning = getSoundingTuning(tuning, capoSettings);
+    const strings = getTuningStrings(soundingTuning);
     const fretPositions = getFretPositions();
+    const maxRelativeFret = 24 - capoFret;
 
-    // Root note is the first note in the chord (normalized for comparison)
-    const rootNote = chordNotes.length > 0 ? normalizeNote(chordNotes[0]) : null;
+    const chordPcs = new Set(chordNotes.map(pitchClass));
+    const rootPc = chordNotes.length > 0 ? pitchClass(chordNotes[0]) : null;
+
+    const markersFor = (stringRoot: string, notes: string[]) =>
+        notes.flatMap(note =>
+            getFretsForNoteOnString(stringRoot, note, maxRelativeFret).map(fret => ({ note, fret }))
+        );
 
     // Build sets for voicing highlight lookup: exact position and octave (+12)
     const voicingSet = new Set<string>();
@@ -38,7 +47,11 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
         });
     }
     return (
-        <div className="mt-3 p-2 sm:p-3 rounded-lg" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+        <div
+            className={compact ? '' : 'mt-3 p-2 sm:p-3 rounded-lg'}
+            style={compact ? undefined : { background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}
+        >
+            {!compact && (
             <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3" style={{ color: 'var(--text)' }}>
                 Fretboard
                 {capoSettings.enabled && capoSettings.fret > 0 && (
@@ -47,27 +60,18 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                     </span>
                 )}
             </h3>
+            )}
             <div className="space-y-0.5 sm:space-y-1">
                 {strings.map((stringRoot, stringIndex) => {
-                    const chordMarkers = chordNotes.flatMap((note) =>
-                        getFretsForNoteOnString(stringRoot, note)
-                            .filter(fret => fret <= 24)
-                            .filter(fret => isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0))
-                            .map((fret) => ({ note, fret }))
-                    );
+                    const chordMarkers = markersFor(stringRoot, chordNotes);
 
                     // Lead-only markers: notes in active lead but NOT in chord
                     const leadOnlyNotes = activeLeadNotes
-                        ? activeLeadNotes.filter(n => !chordNotes.includes(n))
+                        ? activeLeadNotes.filter(n => !chordPcs.has(pitchClass(n)))
                         : [];
-                    const leadOnlyMarkers = leadOnlyNotes.flatMap((note) =>
-                        getFretsForNoteOnString(stringRoot, note)
-                            .filter(fret => fret <= 24)
-                            .filter(fret => isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0))
-                            .map((fret) => ({ note, fret }))
-                    );
+                    const leadOnlyMarkers = markersFor(stringRoot, leadOnlyNotes);
 
-                    const chordNoteSet = activeLeadNotes ? new Set(activeLeadNotes) : null;
+                    const leadPcs = activeLeadNotes ? new Set(activeLeadNotes.map(pitchClass)) : null;
                     const allMarkerCount = chordMarkers.length + leadOnlyMarkers.length;
 
                     return (
@@ -114,16 +118,17 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                         <FretMarker
                                             key={`chord-${marker.note}-${marker.fret}-${i}`}
                                             fret={marker.fret}
+                                            capoFret={capoFret}
                                             note={marker.note}
                                             guitarString={stringRoot}
                                             stringIndex={stringIndex}
-                                            tuning={tuning}
+                                            tuning={soundingTuning}
                                             onFretClick={onFretClick}
-                                            isLeadNote={chordNoteSet?.has(marker.note)}
-                                            isOverlap={chordNoteSet?.has(marker.note)}
+                                            isLeadNote={leadPcs?.has(pitchClass(marker.note))}
+                                            isOverlap={leadPcs?.has(pitchClass(marker.note))}
                                             isVoicing={voicingSet.has(key)}
                                             isOctaveVoicing={octaveVoicingSet.has(key)}
-                                            isRoot={rootNote !== null && normalizeNote(marker.note) === rootNote}
+                                            isRoot={rootPc !== null && pitchClass(marker.note) === rootPc}
                                         />
                                     );
                                 })}
@@ -133,30 +138,24 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                     <FretMarker
                                         key={`lead-${marker.note}-${marker.fret}-${i}`}
                                         fret={marker.fret}
+                                        capoFret={capoFret}
                                         note={marker.note}
                                         guitarString={stringRoot}
                                         stringIndex={stringIndex}
-                                        tuning={tuning}
+                                        tuning={soundingTuning}
                                         onFretClick={onFretClick}
                                         isLeadNote
                                     />
                                 ))}
 
                                 {/* Preview/next-chord note markers (faded) */}
-                                {previewNotes && previewNotes
-                                    .filter(n => !chordNotes.some(cn => normalizeNote(cn) === normalizeNote(n)))
-                                    .flatMap((note) =>
-                                        getFretsForNoteOnString(stringRoot, note)
-                                            .filter(fret => fret <= 24)
-                                            .filter(fret => isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0))
-                                            .map((fret) => ({ note, fret }))
-                                    )
+                                {previewNotes && markersFor(stringRoot, previewNotes.filter(n => !chordPcs.has(pitchClass(n))))
                                     .map((marker, i) => (
                                         <div
                                             key={`preview-${marker.note}-${marker.fret}-${i}`}
                                             className="absolute w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold border-2 z-5"
                                             style={{
-                                                left: `${getFretCenterPosition(marker.fret)}%`,
+                                                left: `${getFretCenterPosition(marker.fret + capoFret)}%`,
                                                 transform: 'translateX(-50%) translateY(-50%)',
                                                 top: '50%',
                                                 background: 'var(--glow)',

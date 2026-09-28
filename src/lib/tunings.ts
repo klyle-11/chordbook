@@ -143,11 +143,21 @@ export function applyCapo(tuning: Tuning, capoFret: number): Tuning {
   };
 }
 
-export function isFretAvailable(fret: number, capoFret: number): boolean {
-  return capoFret === 0 || fret >= capoFret;
+/** Active capo fret, or 0 when the capo is off. */
+export function getCapoFret(capo: CapoSettings | undefined): number {
+  return capo?.enabled && capo.fret > 0 ? capo.fret : 0;
 }
 
-export function getEffectiveFret(fret: number, capoFret: number): number {
-  if (capoFret === 0) return fret;
-  return fret - capoFret;
+/**
+ * The tuning as heard with the capo on. Voicing frets, tab and chord shapes are
+ * all stored relative to the capo (tab convention: "0" = the capoed string), so
+ * note derivation, fingering and audio must use this tuning, not the raw one.
+ * Only fretboard drawing needs the raw nut position (fret + capo).
+ */
+export function getSoundingTuning(tuning: Tuning, capo: CapoSettings | undefined): Tuning {
+  return applyCapo(tuning, getCapoFret(capo));
+}
+
+export function isFretAvailable(fret: number, capoFret: number): boolean {
+  return capoFret === 0 || fret >= capoFret;
 }

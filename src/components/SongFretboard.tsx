@@ -1,0 +1,68 @@
+import type { Tuning, CapoSettings } from '../lib/tunings';
+import type { FretboardFocus } from '../lib/fretboardFocus';
+import FretboardDiagram from './FretboardDiagram';
+
+interface SongFretboardProps {
+  focus: FretboardFocus | null;
+  songNotes: string[];
+  tuning: Tuning;
+  capoSettings: CapoSettings;
+  activeLeadNotes?: string[];
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}
+
+/**
+ * The one full-neck fretboard for the open song, pinned in the song header.
+ * Shows the focused chord (clicked or playing in any progression), or every
+ * note in the song when nothing is focused.
+ */
+export default function SongFretboard({
+  focus, songNotes, tuning, capoSettings, activeLeadNotes, collapsed, onToggleCollapsed,
+}: SongFretboardProps) {
+  const notes = focus ? focus.chordNotes : songNotes;
+
+  return (
+    <div className="song-fretboard">
+      <div className="song-fretboard__bar">
+        <button
+          onClick={onToggleCollapsed}
+          className="song-fretboard__toggle"
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Show fretboard' : 'Hide fretboard'}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+            style={{ transform: collapsed ? 'rotate(-90deg)' : undefined, transition: 'transform 0.15s ease' }}>
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        <span className="song-fretboard__label">{focus ? focus.chordName : 'Song notes'}</span>
+        <span className="song-fretboard__notes">{notes.join(' ')}</span>
+        {focus?.previewName && (
+          <span className="song-fretboard__next">next: {focus.previewName}</span>
+        )}
+        {focus?.onFretClick && (
+          <span className="song-fretboard__hint">click notes to fill the tab</span>
+        )}
+      </div>
+      {!collapsed && (
+        notes.length > 0 ? (
+          <div className="song-fretboard__neck">
+            <FretboardDiagram
+              compact
+              chordNotes={notes}
+              tuning={tuning}
+              capoSettings={capoSettings}
+              voicingFrets={focus?.voicingFrets}
+              previewNotes={focus?.previewNotes}
+              onFretClick={focus?.onFretClick}
+              activeLeadNotes={activeLeadNotes}
+            />
+          </div>
+        ) : (
+          <div className="song-fretboard__empty">Add chords to see them on the fretboard</div>
+        )
+      )}
+    </div>
+  );
+}

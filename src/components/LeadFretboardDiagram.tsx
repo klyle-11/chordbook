@@ -1,16 +1,10 @@
 import { useState, useRef, useCallback } from 'react';
 import { getFretPositions } from '../lib/fretPositions';
-import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable, applyCapo } from '../lib/tunings';
+import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable } from '../lib/tunings';
 import { audioPlayer } from '../lib/audioPlayer';
 import type { LeadNote } from '../types/lead';
+import { getNoteAtFret } from '../lib/fretUtils';
 
-const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-function getNoteAtFret(openNote: string, fret: number): string {
-  const idx = CHROMATIC.indexOf(openNote);
-  if (idx === -1) return '?';
-  return CHROMATIC[(idx + fret) % 12];
-}
 
 interface FlyoutState {
   stringIndex: number;
@@ -28,10 +22,9 @@ interface LeadFretboardDiagramProps {
 }
 
 export default function LeadFretboardDiagram({ tuning, capoSettings, currentLeadNotes, onAddNote }: LeadFretboardDiagramProps) {
-  const effectiveTuning = capoSettings.enabled && capoSettings.fret > 0
-    ? applyCapo(tuning, capoSettings.fret)
-    : tuning;
-  const strings = getTuningStrings(effectiveTuning);
+  // Lead notes are stored at absolute frets (from the nut), so note names come from the
+  // raw tuning; the capo only blocks frets behind it.
+  const strings = getTuningStrings(tuning);
   const fretPositions = getFretPositions();
   const [flyout, setFlyout] = useState<FlyoutState | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
