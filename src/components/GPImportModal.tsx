@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { parseGPFile, type GPFileData, type GPNote } from '../lib/gpParser';
-import { findChordByNotes } from '../lib/chordUtils';
+import { findChordByNotes } from '../lib/music/chords';
 import type { ChordVoicing } from '../types/chord';
 import type { LeadNote } from '../types/lead';
 

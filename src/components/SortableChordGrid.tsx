@@ -14,16 +14,16 @@ import {
   rectSortingStrategy,
 } from '@dnd-kit/sortable';
 import type { Chord, ChordVoicing } from '../types/chord';
-import type { Tuning, CapoSettings } from '../lib/tunings';
-import { getTuningStrings, getSoundingTuning } from '../lib/tunings';
-import { getNoteAtFret } from '../lib/fretUtils';
+import type { Tuning, CapoSettings } from '../lib/music/tunings';
+import { getTuningStrings, getSoundingTuning } from '../lib/music/tunings';
+import { getNoteAtFret } from '../lib/music/notes';
 import { audioPlayer } from '../lib/audioPlayer';
 import type { ChordAnalysis, HarmonicContext } from '../lib/harmonicAnalysis';
 import DraggableChordCard from './DraggableChordCard';
 import ChordVoicingEditor, { type ChordVoicingEditorRef } from './ChordVoicingEditor';
 import QuickTabEditor from './QuickTabEditor';
-import { calculateChordFingering } from './ChordDiagram';
-import { getNotesForChord, isValidChord } from '../lib/chordUtils';
+import { calculateChordFingering } from '../lib/music/fingering';
+import { getNotesForChord, isValidChord } from '../lib/music/chords';
 import { EditableText } from './EditableText';
 import { useFretboardFocus } from '../lib/fretboardFocus';
 

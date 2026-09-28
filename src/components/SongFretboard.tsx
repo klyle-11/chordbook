@@ -1,4 +1,4 @@
-import type { Tuning, CapoSettings } from '../lib/tunings';
+import type { Tuning, CapoSettings } from '../lib/music/tunings';
 import type { FretboardFocus } from '../lib/fretboardFocus';
 import FretboardDiagram from './FretboardDiagram';
 

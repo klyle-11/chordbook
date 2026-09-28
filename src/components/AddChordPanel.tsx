@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
-import type { Tuning } from '../lib/tunings';
+import type { Tuning } from '../lib/music/tunings';
 import type { ChordVoicing } from '../types/chord';
-import { isValidChord, getChordSuggestions, getNotesForChord, findChordByNotes } from '../lib/chordUtils';
+import { isValidChord, getChordSuggestions, getNotesForChord, findChordByNotes } from '../lib/music/chords';
 import { parseChordInput, addCustomChord } from '../lib/customChordLibrary';
-import { getNotesFromVoicing } from '../lib/fretUtils';
+import { getNotesFromVoicing } from '../lib/music/notes';
 
 type Mode = 'name' | 'tab';
 

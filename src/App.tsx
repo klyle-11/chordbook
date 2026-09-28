@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getNotesForChord, findChordByNotes } from './lib/chordUtils';
-import { getNotesFromVoicing, pitchClassKey } from './lib/fretUtils';
+import { getNotesForChord, findChordByNotes } from './lib/music/chords';
+import { getNotesFromVoicing, pitchClassKey } from './lib/music/notes';
 import type { Song, SongLink, TimeSignature, ChordPairing } from './types/song';
 import type { ChordVoicing } from './types/chord';
 import type { Lead } from './types/lead';
 import type { LeadNote } from './types/lead';
 import type { ImportedProgression, ImportedLead } from './components/GPImportModal';
-import { DEFAULT_TUNING, getSoundingTuning, type Tuning, type CapoSettings } from './lib/tunings';
+import { DEFAULT_TUNING, getSoundingTuning, type Tuning, type CapoSettings } from './lib/music/tunings';
 import {
   saveSongs,
   saveCurrentSong,

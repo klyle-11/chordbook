@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { Tuning, CapoSettings } from '../lib/tunings';
+import type { Tuning, CapoSettings } from '../lib/music/tunings';
 import type { LeadNote } from '../types/lead';
 import LeadFretboardDiagram from './LeadFretboardDiagram';
 import LeadNoteSequence from './LeadNoteSequence';

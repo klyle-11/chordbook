@@ -30,7 +30,7 @@ Built with React + TypeScript + Vite, packaged as a desktop app with **Tauri v2*
 - Fret arrays are ordered **high string first** (index 0 = high E), matching `Tuning.strings`.
 - **Tab and voicing frets are relative to the capo**, as in printed tab: with capo 2, `0` means the capoed string. Note names, audio and fingering use `getSoundingTuning(tuning, capo)`. Only the fretboard drawing adds the capo back (`fret + capo`).
 - Lead notes are currently stored at absolute frets (see [TODO.md](TODO.md)).
-- Note comparisons go through `pitchClass()` in `src/lib/fretUtils.ts`, so any spelling works (`Eb`, `D#`, `E♭`, `F##`, `Cb`).
+- Note comparisons go through `pitchClass()` in `src/lib/music/notes.ts`, so any spelling works (`Eb`, `D#`, `E♭`, `F##`, `Cb`).
 
 ## Development
 
@@ -43,6 +43,7 @@ npm run tauri dev    # desktop app (starts Vite for you)
 npm run tauri build  # desktop bundle (.app / .dmg / .msi / .deb …)
 npm run build        # typecheck + production web build to dist/
 npm run lint
+npm test             # vitest (src/**/*.test.ts); npm run test:watch while developing
 ```
 
 ## Project layout
@@ -61,10 +62,12 @@ src/
     ChordVoicingEditor.tsx    full voicing editor (library save)
     FretboardDiagram.tsx      24-fret neck
   lib/
-    fretUtils.ts              pitch classes, note-at-fret, notes from a voicing
-    tunings.ts                tunings, capo (getSoundingTuning)
-    defaultVoicings.ts        common chord shapes for any tuning/capo
-    chordUtils.ts             chord names ↔ notes (tonal), rename suggestions
+    music/                    pure music theory, no React — each file has a *.test.ts
+      notes.ts                pitch classes, note-at-fret, notes from a voicing
+      tunings.ts              tunings, capo (getSoundingTuning)
+      voicings.ts             common chord shapes for any tuning/capo
+      fingering.ts            diagram fingering (default shape → search fallback)
+      chords.ts               chord names ↔ notes (tonal), rename suggestions
     harmonicAnalysis.ts       key + function analysis
     audioPlayer.ts            SpessaSynth SoundFont playback
     db.ts                     Dexie (IndexedDB) schema

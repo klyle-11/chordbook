@@ -1,4 +1,4 @@
-import { TUNINGS, type Tuning, type CapoSettings } from '../lib/tunings';
+import { TUNINGS, type Tuning, type CapoSettings } from '../lib/music/tunings';
 
 interface TuningSelectorProps {
   currentTuning: Tuning;

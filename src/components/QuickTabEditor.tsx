@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Tuning } from '../lib/tunings';
-import { getNoteAtFret, getNotesFromVoicing, getFretsForNoteOnString } from '../lib/fretUtils';
-import { suggestRenameForTab } from '../lib/chordUtils';
+import type { Tuning } from '../lib/music/tunings';
+import { getNoteAtFret, getNotesFromVoicing, getFretsForNoteOnString } from '../lib/music/notes';
+import { suggestRenameForTab } from '../lib/music/chords';
 import { audioPlayer } from '../lib/audioPlayer';
 
 type Frets = (number | null)[];

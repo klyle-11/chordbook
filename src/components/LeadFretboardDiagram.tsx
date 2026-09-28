@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
 import { getFretPositions } from '../lib/fretPositions';
-import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable } from '../lib/tunings';
+import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable } from '../lib/music/tunings';
 import { audioPlayer } from '../lib/audioPlayer';
 import type { LeadNote } from '../types/lead';
-import { getNoteAtFret } from '../lib/fretUtils';
+import { getNoteAtFret } from '../lib/music/notes';
 
 
 interface FlyoutState {

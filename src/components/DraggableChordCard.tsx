@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Chord, ChordVoicing, SavedVoicing } from '../types/chord';
-import type { Tuning } from '../lib/tunings';
+import type { Tuning } from '../lib/music/tunings';
 import type { ChordAnalysis, HarmonicContext } from '../lib/harmonicAnalysis';
 import { findVoicingsForNotes } from '../lib/savedVoicingLibrary';
 import { ChordDiagram } from './ChordDiagram';

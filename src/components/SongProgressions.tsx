@@ -3,7 +3,7 @@ import type { NamedProgression, ChordPairing, TimeSignature } from '../types/son
 import type { ChordVoicing } from '../types/chord';
 import type { Lead } from '../types/lead';
 import type { LeadNote } from '../types/lead';
-import { getSoundingTuning, type Tuning, type CapoSettings } from '../lib/tunings';
+import { getSoundingTuning, type Tuning, type CapoSettings } from '../lib/music/tunings';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';

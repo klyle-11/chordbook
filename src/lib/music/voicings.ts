@@ -1,6 +1,6 @@
 import { Chord, Interval } from '@tonaljs/tonal';
 import { DEFAULT_TUNING, type Tuning } from './tunings';
-import { pitchClass, CHROMATIC } from './fretUtils';
+import { pitchClass, CHROMATIC } from './notes';
 
 /**
  * Default ("most people play it this way") voicings.

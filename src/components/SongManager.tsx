@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Song, SongLink } from '../types/song';
 import { EditableText } from './EditableText';
-import { DEFAULT_TUNING } from '../lib/tunings';
+import { DEFAULT_TUNING } from '../lib/music/tunings';
 import PDFExportDialog from './PDFExportDialog';
 import FretboardDiagram from './FretboardDiagram';
 import TuningSelector from './TuningSelector';
@@ -9,7 +9,7 @@ import GPImportModal from './GPImportModal';
 import SongLinks from './SongLinks';
 import type { ImportedProgression, ImportedLead } from './GPImportModal';
 import { getUniqueNotesFromSong } from '../lib/songAnalysis';
-import type { Tuning, CapoSettings } from '../lib/tunings';
+import type { Tuning, CapoSettings } from '../lib/music/tunings';
 
 interface SongManagerProps {
   songs: Song[];

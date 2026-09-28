@@ -1,6 +1,6 @@
-import { getFretsForNoteOnString, pitchClass } from "../lib/fretUtils";
+import { getFretsForNoteOnString, pitchClass } from "../lib/music/notes";
 import { getFretPositions, getFretCenterPosition } from "../lib/fretPositions";
-import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable, getCapoFret, getSoundingTuning } from "../lib/tunings";
+import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable, getCapoFret, getSoundingTuning } from "../lib/music/tunings";
 import FretMarker from "./FretMarker";
 
 interface FretboardDiagramProps {

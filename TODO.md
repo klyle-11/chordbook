@@ -12,13 +12,13 @@ Last reviewed: 2026-09-28. Items are roughly ordered by value within each sectio
   - "More…" opens the full editor, where clicking the fretboard fills the tab and you can save to the library
 - [x] **Rename prompt when the tab changes the harmony.** For example, "Tab plays D (not in C). Rename to Cadd9". The chord name can also be edited directly in the progression toolbar (this replaces the old `handleChordReplace` stub).
 - [x] **Voicing edits stay per chord.** Applying a voicing no longer overwrites every same-named chord in every song. It only fills same-named chords that have *no* voicing, in songs with the same tuning. Library auto-save skips exact duplicates.
-- [x] **Better default voicings** (`src/lib/defaultVoicings.ts`):
+- [x] **Better default voicings** (`src/lib/music/voicings.ts`):
   - Open chords first, then E/A/D-shape barres, covering 17 chord qualities.
   - Mapped onto any 6-string tuning or capo (half-step down, D standard, drop D/C) by working out the neck shift and per-string offsets.
   - Bass tunings get root–5th–octave shapes.
   - Every shape is checked to sound only chord tones, including the root.
 - [x] **Capo fixes.** The fretboard drew notes shifted by the capo amount, and audio and note naming ignored the capo. There is now a single convention (see the README): tab and voicing frets are **relative to the capo**, and only fretboard drawing adds the capo back.
-- [x] **Enharmonic fixes.** One `pitchClass()` in `fretUtils.ts` handles `E#`, `B#`, `F##`, `Cb` and unicode `♭`/`♯`. Before, D# major's `F##`, A#m's `E#` and custom `B♭` notes silently vanished from fretboards and fingerings, and tab-entered Eb/Ab/Bb chords were never named.
+- [x] **Enharmonic fixes.** One `pitchClass()` in `lib/music/notes.ts` handles `E#`, `B#`, `F##`, `Cb` and unicode `♭`/`♯`. Before, D# major's `F##`, A#m's `E#` and custom `B♭` notes silently vanished from fretboards and fingerings, and tab-entered Eb/Ab/Bb chords were never named.
 - [x] **Song-wide fretboard in the song header**, under the title. It shows the clicked or playing chord from any progression, with the voicing highlighted and the next chord previewed. With nothing selected it shows every note in the song, and it can be collapsed. The per-progression fretboards are gone; chord cards are unchanged.
 - [x] **Song links:** a link icon next to the title opens a small popover that lists saved links (tabs, notation, videos) and adds new ones. Only http(s) links are accepted; they are stored on the song and included in backups.
 - [x] Removed dead code: 13 unused components, `traditionalChordShapes.ts`, `inputValidation.ts`, and duplicated `CHROMATIC`/`FLAT_TO_SHARP` tables.
@@ -32,7 +32,7 @@ Last reviewed: 2026-09-28. Items are roughly ordered by value within each sectio
 - [ ] `backfillVoicings` and `handleAddChord` match library voicings by stripping a `" <n>"` suffix from the name. Store `chordName` on `SavedVoicing` instead.
 - [ ] New progressions are named `Progression <timestamp>`; use "Progression N".
 - [ ] `progressionAnalysis` `useMemo` depends on `currentSong?.progressions` but reads `currentSong` (lint warning).
-- [ ] Two lint `no-empty` catch blocks in `App.tsx`, plus unused `_` params (`npm run lint` has 11 errors; all pre-existing).
+- [ ] Two lint `no-empty` catch blocks in `App.tsx`, plus unused `_` params (`npm run lint` has 9 errors; all pre-existing).
 - [ ] `target="_blank"` links may not open the system browser inside Tauri. Add `tauri-plugin-opener` and call `openUrl`.
 
 ## Architecture / efficiency
@@ -44,7 +44,6 @@ The app is small (~12k lines of TS/TSX, excluding CSS) and fast enough. The cost
 - [ ] `DraggableChordCard` runs one IndexedDB query per card for saved voicings. Load the voicing library once per tuning, keep it in memory, and share it.
 - [ ] Drag-and-drop ids are `chord-${index}`, so React keys change on reorder. Give chords a stable `id`.
 - [ ] Heavy inline `style={{…}}` objects and hover handlers written in JS. Move them to CSS classes, as the header/links/quick-editor now do.
-- [ ] `calculateChordFingering` is exported from a component file (`ChordDiagram.tsx`), which breaks fast refresh. Move it to `lib/`.
 - [ ] Stale Electron entry points (`electron-main.js/.cjs`, `dist-electron/`). The app ships with Tauri, so delete them.
 - [ ] The bundle is 1.1 MB (jspdf + html2canvas). Lazy-load the PDF export with `import()`.
 
@@ -63,12 +62,11 @@ The app is small (~12k lines of TS/TSX, excluding CSS) and fast enough. The cost
 
 ## Theory / voicing code: clarity
 
-- **Current map:** `lib/fretUtils.ts` (notes and pitch classes), `lib/tunings.ts` (tunings and capo), `lib/defaultVoicings.ts` (common shapes), `components/ChordDiagram.tsx` (finger numbers plus the fallback search), `lib/chordUtils.ts` (naming via tonal).
-- [ ] Consolidate these into `lib/music/` (`notes.ts`, `tunings.ts`, `voicings.ts`, `fingering.ts`) with no React imports, and add tests.
-- [ ] Unit tests (vitest) for `pitchClass`, `getDefaultVoicing` across all tunings, `findChordByNotes`, the capo round-trips, and `suggestRenameForTab`. The checks run in this pass were ad-hoc scripts; make them permanent.
+- [x] Consolidated into `src/lib/music/` with no React imports: `notes.ts`, `tunings.ts`, `voicings.ts`, `fingering.ts` (moved out of `ChordDiagram.tsx`), `chords.ts`.
+- [x] Unit tests (vitest, `npm test`), 97 tests: `pitchClass` spellings, capo round-trips for every tuning × capo 0–12, the expected standard shapes, every root × quality × tuning (+ capo) sounding only chord tones in one hand position, `findChordByNotes`, `suggestRenameForTab`, and fingering.
 - [ ] `assignFingerNumbers` is naive: it treats any 3+ strings on the lowest fret as a barre, and doesn't handle partial barres or thumb-over. Store fingers in the shape table instead.
 - [ ] Slash chords and inversions (`C/G`) aren't parsed for diagrams; use tonal's `bass`.
-- [ ] Cycle through alternative voicings (the next shape up the neck) on a card, using the other candidates `defaultVoicings` already computes.
+- [ ] Cycle through alternative voicings (the next shape up the neck) on a card, using the other candidates `lib/music/voicings.ts` already computes.
 - [ ] Bass shapes beyond root–5th–octave (add the 10th/3rd); 7-string and baritone tunings; custom tunings.
 - [ ] Optional display toggle: capo-relative vs absolute fret numbers on the header fretboard.
 
@@ -80,4 +78,4 @@ The app is small (~12k lines of TS/TSX, excluding CSS) and fast enough. The cost
 - [ ] Setlist / performance mode: the header fretboard plus a big current/next chord, auto-advancing with the metronome.
 - [ ] Link previews in the links popover: favicon or type icon for YouTube, Songsterr, Ultimate Guitar, PDF.
 - [ ] Import a chord sheet (ChordPro / plain text with chords above lyrics) into progressions.
-- [ ] CI: `tsc -b`, `eslint`, and the tests on each push.
+- [ ] CI: `tsc -b`, `eslint`, and `npm test` on each push.

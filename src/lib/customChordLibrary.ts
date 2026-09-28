@@ -8,6 +8,7 @@ interface CustomChord {
 const CUSTOM_CHORDS_KEY = 'chordbook-custom-chords';
 
 export function getCustomChords(): CustomChord[] {
+  if (typeof localStorage === 'undefined') return []; // tests / non-browser
   try {
     const stored = localStorage.getItem(CUSTOM_CHORDS_KEY);
     if (stored) {

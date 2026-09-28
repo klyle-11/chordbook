@@ -1,6 +1,6 @@
 import { Chord } from "@tonaljs/tonal";
-import { isCustomChord, getCustomChordNotes } from './customChordLibrary';
-import { pitchClass, pitchClassKey } from './fretUtils';
+import { isCustomChord, getCustomChordNotes } from '../customChordLibrary';
+import { pitchClass, pitchClassKey } from './notes';
 
 /**
  * Get the pitch classes for a chord name.

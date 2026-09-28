@@ -1,5 +1,5 @@
 import type { Chord } from './chord';
-import type { Tuning, CapoSettings } from '../lib/tunings';
+import type { Tuning, CapoSettings } from '../lib/music/tunings';
 
 export interface TimeSignature {
   beatsPerMeasure: number; // numerator, e.g. 4

@@ -1,6 +1,6 @@
 import { getFretCenterPosition } from '../lib/fretPositions';
 import { audioPlayer } from '../lib/audioPlayer';
-import { type Tuning } from '../lib/tunings';
+import { type Tuning } from '../lib/music/tunings';
 
 interface FretMarkerProps {
     fret: number;       // relative to the capo (what the tab says)

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import type { Tuning } from '../lib/tunings';
-import { getNotesFromVoicing, getFretsForNoteOnString, normalizeNote, pitchClass } from '../lib/fretUtils';
+import type { Tuning } from '../lib/music/tunings';
+import { getNotesFromVoicing, getFretsForNoteOnString, normalizeNote, pitchClass } from '../lib/music/notes';
 import { saveVoicing } from '../lib/savedVoicingLibrary';
-import { suggestRenameForTab } from '../lib/chordUtils';
+import { suggestRenameForTab } from '../lib/music/chords';
 
 export interface ChordVoicingEditorRef {
   setFretForString: (stringIndex: number, fret: number) => void;

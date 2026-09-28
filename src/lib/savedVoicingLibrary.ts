@@ -1,7 +1,7 @@
 import { db } from './db';
 import type { SavedVoicing } from '../types/chord';
 
-import { pitchClassKey } from './fretUtils';
+import { pitchClassKey } from './music/notes';
 
 export async function getSavedVoicings(tuningId?: string): Promise<SavedVoicing[]> {
   try {
