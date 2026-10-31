@@ -77,22 +77,22 @@ function DotView({ chordName, tuning, activeLeadNotes }: { chordName: string; tu
 
   return (
     <>
-      <div className="text-center font-semibold text-sm mb-2">{chordName}</div>
+      <div className="text-center font-semibold text-sm mb-2 text-[var(--card-text)]">{chordName}</div>
       {startFret > 0 && (
-        <div className="text-center text-xs text-gray-600 mb-1">
+        <div className="text-center text-xs text-[var(--card-text-secondary)] mb-1">
           {startFret === 1 ? '1st fret' : `${startFret}${getOrdinalSuffix(startFret)} fret`}
         </div>
       )}
-      {capo && <div className="text-center text-xs text-orange-600 font-semibold mb-1">Barre {capo}</div>}
+      {capo && <div className="text-center text-xs text-[var(--accent)] font-semibold mb-1">Barre {capo}</div>}
       <div className="relative flex">
-        <div className="flex flex-col justify-between text-xs text-gray-600 mr-2 h-24">
+        <div className="flex flex-col justify-between text-xs text-[var(--card-text-secondary)] mr-2 h-24">
           {strings.map((s, i) => <span key={i} className="h-6 flex items-center">{s}</span>)}
         </div>
         <div className="relative flex">
           {[0, 1, 2, 3].map(offset => {
             const actualFret = startFret + offset;
             return (
-              <div key={offset} className="flex flex-col justify-between w-6 border-r border-gray-400 h-24">
+              <div key={offset} className="flex flex-col justify-between w-6 border-r border-[var(--fret-divider)] h-24">
                 {positions.map((pos, si) => {
                   const isActive = typeof pos.fret === 'number';
                   const note = isActive ? getNoteAtFret(strings[si], pos.fret as number) : null;
@@ -106,29 +106,29 @@ function DotView({ chordName, tuning, activeLeadNotes }: { chordName: string; tu
                       onMouseLeave={() => setHoveredString(null)}
                     >
                       {!(pos.fret === 0 && actualFret === 0) && (
-                        <div className="absolute left-1/2 h-px w-6 bg-gray-400 transform -translate-x-1/2" />
+                        <div className="absolute left-1/2 h-px w-6 bg-[var(--fret-string)] transform -translate-x-1/2" />
                       )}
                       {typeof pos.fret === 'number' && pos.fret === actualFret && pos.fret > 0 && (
                         <div
-                          className="relative z-10 w-4 h-4 bg-gray-800 rounded-full flex items-center justify-center"
+                          className="relative z-10 w-4 h-4 bg-[var(--card-text)] rounded-full flex items-center justify-center"
                           title={note || ''}
                           style={note && leadNoteSet?.has(note) ? { boxShadow: '0 0 0 2px var(--lead)' } : undefined}
                         >
-                          <span className="text-white text-xs font-bold">
+                          <span className="text-[var(--bg-card)] text-xs font-bold">
                             {isHovered && note ? note : pos.finger || ''}
                           </span>
                         </div>
                       )}
                       {pos.fret === 'x' && actualFret === startFret && (
-                        <div className="relative z-10 text-red-600 text-sm font-bold">&times;</div>
+                        <div className="relative z-10 text-[var(--danger)] text-sm font-bold">&times;</div>
                       )}
                       {pos.fret === 0 && actualFret === 0 && (
                         <div
-                          className="relative z-10 w-4 h-4 border-2 border-gray-800 rounded-full bg-white flex items-center justify-center"
+                          className="relative z-10 w-4 h-4 border-2 border-[var(--card-text)] rounded-full bg-[var(--bg-card)] flex items-center justify-center"
                           title={note || ''}
                           style={note && leadNoteSet?.has(note) ? { boxShadow: '0 0 0 2px var(--lead)' } : undefined}
                         >
-                          {isHovered && note && <span className="text-gray-800 text-xs font-bold leading-none">{note}</span>}
+                          {isHovered && note && <span className="text-[var(--card-text)] text-xs font-bold leading-none">{note}</span>}
                         </div>
                       )}
                     </div>
@@ -138,7 +138,7 @@ function DotView({ chordName, tuning, activeLeadNotes }: { chordName: string; tu
             );
           })}
         </div>
-        <div className="absolute bottom-0 left-10 flex text-xs text-gray-500 mt-1">
+        <div className="absolute bottom-0 left-10 flex text-xs text-[var(--card-text-muted)] mt-1">
           {[1, 2, 3].map(o => <span key={o} className="w-6 text-center">{startFret + o}</span>)}
         </div>
       </div>

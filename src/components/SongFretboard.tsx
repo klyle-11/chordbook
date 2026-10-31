@@ -1,6 +1,6 @@
 import type { Tuning, CapoSettings } from '../lib/music/tunings';
 import type { FretboardFocus } from '../lib/fretboardFocus';
-import FretboardDiagram from './FretboardDiagram';
+import FretboardDiagram, { type FretboardStyle } from './FretboardDiagram';
 
 interface SongFretboardProps {
   focus: FretboardFocus | null;
@@ -10,6 +10,8 @@ interface SongFretboardProps {
   activeLeadNotes?: string[];
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  fretboardStyle: FretboardStyle;
+  onStyleChange: (style: FretboardStyle) => void;
 }
 
 /**
@@ -18,7 +20,7 @@ interface SongFretboardProps {
  * note in the song when nothing is focused.
  */
 export default function SongFretboard({
-  focus, songNotes, tuning, capoSettings, activeLeadNotes, collapsed, onToggleCollapsed,
+  focus, songNotes, tuning, capoSettings, activeLeadNotes, collapsed, onToggleCollapsed, fretboardStyle, onStyleChange,
 }: SongFretboardProps) {
   const notes = focus ? focus.chordNotes : songNotes;
 
@@ -38,23 +40,39 @@ export default function SongFretboard({
         </button>
         <span className="song-fretboard__label">{focus ? focus.chordName : 'Song notes'}</span>
         <span className="song-fretboard__notes">{notes.join(' ')}</span>
-        {focus?.previewName && (
-          <span className="song-fretboard__next">next: {focus.previewName}</span>
+        {focus?.secondaryName && (
+          <span className="song-fretboard__secondary">
+            {focus.secondaryKind === 'mode'
+              ? `mode: ${focus.secondaryName} · ${focus.secondaryNotes?.join(' ') || ''}`
+              : `next: ${focus.secondaryName}`}
+          </span>
         )}
         {focus?.onFretClick && (
           <span className="song-fretboard__hint">click notes to fill the tab</span>
         )}
+        <button
+          onClick={() => onStyleChange(fretboardStyle === 'wood' ? 'theme' : 'wood')}
+          className="song-fretboard__style"
+          data-active={fretboardStyle === 'wood'}
+          title={fretboardStyle === 'wood' ? 'Switch to flat (theme) fretboard' : 'Switch to wood fretboard'}
+        >
+          {fretboardStyle === 'wood' ? 'Wood' : 'Flat'}
+        </button>
       </div>
       {!collapsed && (
         notes.length > 0 ? (
           <div className="song-fretboard__neck">
             <FretboardDiagram
               compact
+              variant={fretboardStyle}
               chordNotes={notes}
               tuning={tuning}
               capoSettings={capoSettings}
               voicingFrets={focus?.voicingFrets}
-              previewNotes={focus?.previewNotes}
+              secondaryNotes={focus?.secondaryNotes}
+              secondaryLabel={focus?.secondaryKind === 'mode'
+                ? `Mode · ${focus.secondaryName}`
+                : `Next · ${focus?.secondaryName}`}
               onFretClick={focus?.onFretClick}
               activeLeadNotes={activeLeadNotes}
             />

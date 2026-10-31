@@ -26,9 +26,10 @@ export default function FretMarker({ fret, capoFret = 0, note, guitarString, str
         onFretClick?.(stringIndex, fret, note);
     };
 
+    // Colours come from --marker-* variables so fretboard styles (e.g. wood) can restyle them
     const baseStyle: React.CSSProperties = isLeadOnly
         ? { background: 'var(--lead)', borderColor: 'var(--lead)', color: '#000' }
-        : { background: 'var(--accent)', borderColor: 'var(--accent-hover)', color: '#fff' };
+        : { background: 'var(--marker-bg)', borderColor: 'var(--marker-border)', color: 'var(--marker-text)' };
 
     const overlapStyle: React.CSSProperties = isOverlap
         ? { boxShadow: '0 0 0 3px var(--lead)' }
@@ -41,7 +42,7 @@ export default function FretMarker({ fret, capoFret = 0, note, guitarString, str
         : {};
 
     const rootStyle: React.CSSProperties = isRoot
-        ? { background: '#6b3a2a', borderColor: '#4a2218', color: '#f0e0d0' }
+        ? { background: 'var(--marker-root-bg)', borderColor: 'var(--marker-root-border)', color: 'var(--marker-root-text)' }
         : {};
 
     return (

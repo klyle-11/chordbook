@@ -48,6 +48,125 @@ export interface Theme {
   };
 }
 
+
+/** Key colours of a light theme; everything else is derived in lightTheme(). */
+interface LightPalette {
+  bg: string;            // page
+  bgSecondary: string;   // panels, header rows
+  bgCard: string;        // chord cards, progressions
+  text: string;
+  textSecondary: string;
+  textMuted: string;
+  border: string;
+  borderHover: string;
+  accent: string;
+  accentHover: string;
+  accentSubtle: string;
+  tagBg: string;
+  tagText: string;
+  lead: string;          // lead-note highlight — contrasts the accent
+  glow: string;          // selection / capo / next-chord highlight
+  fretDivider: string;
+}
+
+function rgba(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
+function lightTheme(id: string, name: string, p: LightPalette): Theme {
+  return {
+    id,
+    name,
+    colors: {
+      bg: p.bg,
+      bgSecondary: p.bgSecondary,
+      bgCard: p.bgCard,
+      bgCardHover: p.bg,
+      text: p.text,
+      textSecondary: p.textSecondary,
+      textMuted: p.textMuted,
+      border: p.border,
+      borderHover: p.borderHover,
+      accent: p.accent,
+      accentHover: p.accentHover,
+      accentSubtle: p.accentSubtle,
+      danger: '#dc2626',
+      dangerSubtle: '#fef2f2',
+      success: '#16a34a',
+      successSubtle: '#f0fdf4',
+      inputBg: p.bgCard,
+      inputBorder: p.border,
+      overlayBg: rgba(p.text, 0.35),
+      sliderTrack: p.border,
+      tagBg: p.tagBg,
+      tagText: p.tagText,
+      cardText: p.text,
+      cardTextSecondary: p.textSecondary,
+      cardTextMuted: p.textMuted,
+      lead: p.lead,
+      leadSubtle: rgba(p.lead, 0.18),
+      glow: p.glow,
+      glowSubtle: rgba(p.glow, 0.25),
+      fretMarker: p.accentSubtle,
+      fretMarkerBorder: p.borderHover,
+      fretMarkerOpen: p.accentSubtle,
+      fretMarkerOpenBorder: p.borderHover,
+      fretString: p.textMuted,
+      fretDivider: p.fretDivider,
+      fretDividerMuted: p.border,
+      analysis: '#9ca3af',
+      analysisSubtle: 'rgba(156,163,175,0.14)',
+      fnTonic: '#6b9bd2',
+      fnSubdominant: '#6bb58a',
+      fnDominant: '#d27070',
+    },
+  };
+}
+
+const lightThemes: Theme[] = [
+  lightTheme('lime', 'Lime', {
+    bg: '#f7fbea', bgSecondary: '#eef6d6', bgCard: '#fdfff6',
+    text: '#26330f', textSecondary: '#4d5f25', textMuted: '#98a878',
+    border: '#dbe8b8', borderHover: '#a3c45a',
+    accent: '#65a30d', accentHover: '#4d7c0f', accentSubtle: '#ecfccb',
+    tagBg: '#e4f2c4', tagText: '#4d6a14',
+    lead: '#8b5cf6', glow: '#0d9488', fretDivider: '#c5d99a',
+  }),
+  lightTheme('lavender', 'Lavender', {
+    bg: '#f7f5fc', bgSecondary: '#eeeaf8', bgCard: '#fdfcff',
+    text: '#262048', textSecondary: '#4f4880', textMuted: '#a39fc4',
+    border: '#e0dbf2', borderHover: '#9d95d8',
+    accent: '#5b5bd6', accentHover: '#4338ca', accentSubtle: '#e8e6fc',
+    tagBg: '#ebe7f9', tagText: '#534c99',
+    lead: '#e0729b', glow: '#8b5cf6', fretDivider: '#cbc4ea',
+  }),
+  lightTheme('sky', 'Sky', {
+    bg: '#f8f6f1', bgSecondary: '#eef2f4', bgCard: '#fffefb',
+    text: '#1f2d3a', textSecondary: '#4a5d6e', textMuted: '#9aa9b5',
+    border: '#dde5ea', borderHover: '#8fb8d4',
+    accent: '#2b86c5', accentHover: '#1d6aa3', accentSubtle: '#e3f1fa',
+    tagBg: '#e8eef1', tagText: '#3f6784',
+    lead: '#d98c4a', glow: '#0ea5e9', fretDivider: '#c8d5dd',
+  }),
+  lightTheme('citrus', 'Citrus', {
+    bg: '#fffbeb', bgSecondary: '#fef3c7', bgCard: '#fffef7',
+    text: '#3a2a06', textSecondary: '#6e5412', textMuted: '#bfa565',
+    border: '#f6e3a1', borderHover: '#fb923c',
+    accent: '#f97316', accentHover: '#ea580c', accentSubtle: '#ffedd5',
+    tagBg: '#fdf0c2', tagText: '#8a5a00',
+    lead: '#0ea5e9', glow: '#7c3aed', fretDivider: '#ecd48a',
+  }),
+  lightTheme('blossom', 'Blossom', {
+    bg: '#fff5f8', bgSecondary: '#fde8ef', bgCard: '#fffafc',
+    text: '#3b1526', textSecondary: '#7a3556', textMuted: '#c595ab',
+    border: '#f7d4e1', borderHover: '#f472b6',
+    accent: '#ec4899', accentHover: '#db2777', accentSubtle: '#fce7f3',
+    tagBg: '#fbe1eb', tagText: '#9d2b5f',
+    lead: '#14b8a6', glow: '#a855f7', fretDivider: '#f0bcd0',
+  }),
+];
+
 export const themes: Theme[] = [
   {
     id: 'warm',
@@ -144,100 +263,6 @@ export const themes: Theme[] = [
     },
   },
   {
-    id: 'ocean',
-    name: 'Ocean',
-    colors: {
-      bg: '#1d163e',
-      bgSecondary: '#150f30',
-      bgCard: '#faf7f0',
-      bgCardHover: '#f0ebe0',
-      text: '#e8e4f0',
-      textSecondary: '#b8b0d0',
-      textMuted: '#6e6494',
-      border: '#2e2558',
-      borderHover: '#7b6faa',
-      accent: '#818cf8',
-      accentHover: '#a5b4fc',
-      accentSubtle: '#252050',
-      danger: '#fb7185',
-      dangerSubtle: '#301525',
-      success: '#34d399',
-      successSubtle: '#152520',
-      inputBg: '#faf7f0',
-      inputBorder: '#d4cfc4',
-      overlayBg: 'rgba(15,10,35,0.7)',
-      sliderTrack: '#2e2558',
-      tagBg: '#252050',
-      tagText: '#c7c0e8',
-      cardText: '#1a1335',
-      cardTextSecondary: '#3d3566',
-      cardTextMuted: '#8b82b0',
-      lead: '#86efac',
-      leadSubtle: 'rgba(134,239,172,0.18)',
-      glow: '#818cf8',
-      glowSubtle: 'rgba(129,140,248,0.3)',
-      fretMarker: '#c8a868',
-      fretMarkerBorder: '#a88848',
-      fretMarkerOpen: '#c8a868',
-      fretMarkerOpenBorder: '#a88848',
-      fretString: '#6e6494',
-      fretDivider: '#3e3568',
-      fretDividerMuted: '#2e2558',
-      analysis: '#b8c0d0',
-      analysisSubtle: 'rgba(184,192,208,0.14)',
-      fnTonic: '#7ba8d4',
-      fnSubdominant: '#6bc09a',
-      fnDominant: '#d87878',
-    },
-  },
-  {
-    id: 'forest',
-    name: 'Forest',
-    colors: {
-      bg: '#1b3328',
-      bgSecondary: '#142820',
-      bgCard: '#f8f5ed',
-      bgCardHover: '#eee9de',
-      text: '#dce8e0',
-      textSecondary: '#a4c4ae',
-      textMuted: '#5e8a6e',
-      border: '#264a38',
-      borderHover: '#4a7c5e',
-      accent: '#5eaa7d',
-      accentHover: '#7ec49a',
-      accentSubtle: '#1e3d2e',
-      danger: '#fb7185',
-      dangerSubtle: '#2d1520',
-      success: '#5eaa7d',
-      successSubtle: '#1a3528',
-      inputBg: '#f8f5ed',
-      inputBorder: '#cfc9bc',
-      overlayBg: 'rgba(14,28,22,0.7)',
-      sliderTrack: '#264a38',
-      tagBg: '#1e3d2e',
-      tagText: '#a4c4ae',
-      cardText: '#1b2e24',
-      cardTextSecondary: '#3a5c48',
-      cardTextMuted: '#7d9a89',
-      lead: '#b4a6f8',
-      leadSubtle: 'rgba(180,166,248,0.18)',
-      glow: '#5eaa7d',
-      glowSubtle: 'rgba(94,170,125,0.3)',
-      fretMarker: '#b8a060',
-      fretMarkerBorder: '#988040',
-      fretMarkerOpen: '#b8a060',
-      fretMarkerOpenBorder: '#988040',
-      fretString: '#5e8a6e',
-      fretDivider: '#3a5c48',
-      fretDividerMuted: '#264a38',
-      analysis: '#a8b8b0',
-      analysisSubtle: 'rgba(168,184,176,0.14)',
-      fnTonic: '#6ba0c4',
-      fnSubdominant: '#6bb88a',
-      fnDominant: '#d07070',
-    },
-  },
-  {
     id: 'midnight',
     name: 'Midnight',
     colors: {
@@ -284,12 +309,17 @@ export const themes: Theme[] = [
       fnDominant: '#d87878',
     },
   },
+  ...lightThemes,
 ];
 
 const THEME_KEY = 'selectedTheme';
 
+// Retired themes → closest replacement, so saved choices still resolve
+const LEGACY_THEME_IDS: Record<string, string> = { ocean: 'sky', forest: 'lime' };
+
 export function getThemeById(id: string): Theme {
-  return themes.find(t => t.id === id) || themes[0];
+  const resolved = LEGACY_THEME_IDS[id] ?? id;
+  return themes.find(t => t.id === resolved) || themes[0];
 }
 
 export function applyTheme(theme: Theme): void {

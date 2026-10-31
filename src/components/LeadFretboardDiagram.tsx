@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { getFretPositions } from '../lib/fretPositions';
-import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable } from '../lib/music/tunings';
+import { type Tuning, getTuningStrings, type CapoSettings, isFretAvailable, getCapoFret, getSoundingTuning } from '../lib/music/tunings';
 import { audioPlayer } from '../lib/audioPlayer';
 import type { LeadNote } from '../types/lead';
 import { getNoteAtFret } from '../lib/music/notes';
@@ -22,9 +22,11 @@ interface LeadFretboardDiagramProps {
 }
 
 export default function LeadFretboardDiagram({ tuning, capoSettings, currentLeadNotes, onAddNote }: LeadFretboardDiagramProps) {
-  // Lead notes are stored at absolute frets (from the nut), so note names come from the
-  // raw tuning; the capo only blocks frets behind it.
-  const strings = getTuningStrings(tuning);
+  // Lead notes use capo-relative frets (like tab and chord voicings). The neck is drawn
+  // from the nut, so a drawn column is `fret + capo`; notes and audio use the sounding tuning.
+  const capoFret = getCapoFret(capoSettings);
+  const soundingTuning = getSoundingTuning(tuning, capoSettings);
+  const strings = getTuningStrings(soundingTuning);
   const fretPositions = getFretPositions();
   const [flyout, setFlyout] = useState<FlyoutState | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -47,9 +49,9 @@ export default function LeadFretboardDiagram({ tuning, capoSettings, currentLead
       pressTimerRef.current = null;
     }
     if (!didLongPressRef.current) {
-      audioPlayer.playNote(note, 0.8, strings[stringIndex], fret, stringIndex, tuning);
+      audioPlayer.playNote(note, 0.8, strings[stringIndex], fret, stringIndex, soundingTuning);
     }
-  }, [strings, tuning]);
+  }, [strings, soundingTuning]);
 
   const handlePointerLeave = useCallback(() => {
     if (pressTimerRef.current) {
@@ -61,10 +63,10 @@ export default function LeadFretboardDiagram({ tuning, capoSettings, currentLead
   const handleConfirmAdd = useCallback(() => {
     if (flyout) {
       onAddNote(flyout.note, flyout.stringIndex, flyout.fret);
-      audioPlayer.playNote(flyout.note, 0.5, strings[flyout.stringIndex], flyout.fret, flyout.stringIndex, tuning);
+      audioPlayer.playNote(flyout.note, 0.5, strings[flyout.stringIndex], flyout.fret, flyout.stringIndex, soundingTuning);
       setFlyout(null);
     }
-  }, [flyout, onAddNote, strings, tuning]);
+  }, [flyout, onAddNote, strings, soundingTuning]);
 
   const isNoteInLead = (stringIndex: number, fret: number): boolean => {
     return currentLeadNotes.some(n => n.stringIndex === stringIndex && n.fret === fret);
@@ -103,13 +105,15 @@ export default function LeadFretboardDiagram({ tuning, capoSettings, currentLead
                 ))}
 
                 {/* Clickable fret zones */}
-                {Array.from({ length: maxFret + 1 }, (_, fret) => {
-                  if (!isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0)) return null;
+                {Array.from({ length: maxFret + 1 }, (_, column) => {
+                  // `column` is the drawn position from the nut; `fret` is capo-relative
+                  if (!isFretAvailable(column, capoFret)) return null;
+                  const fret = column - capoFret;
                   const note = getNoteAtFret(stringRoot, fret);
                   const inLead = isNoteInLead(stringIndex, fret);
-                  const centerPos = fret === 0
+                  const centerPos = column === 0
                     ? 0
-                    : ((fretPositions[fret - 1] + fretPositions[fret]) / 2 / fretPositions[maxFret]) * 100;
+                    : ((fretPositions[column - 1] + fretPositions[column]) / 2 / fretPositions[maxFret]) * 100;
 
                   return (
                     <div

@@ -3,7 +3,8 @@ import type { SongLink } from '../types/song';
 
 interface SongLinksProps {
   links: SongLink[];
-  onChange: (links: SongLink[]) => void;
+  /** Omit for a read-only list (exported song viewer) */
+  onChange?: (links: SongLink[]) => void;
 }
 
 /** Accepts "example.com/tab" too; only http(s) URLs are allowed. */
@@ -46,6 +47,7 @@ export default function SongLinks({ links, onChange }: SongLinksProps) {
   }
 
   function handleAdd() {
+    if (!onChange) return;
     const url = parseUrl(urlInput);
     if (!url) {
       setError('Enter a valid http(s) link');
@@ -73,7 +75,7 @@ export default function SongLinks({ links, onChange }: SongLinksProps) {
         onClick={() => (open ? close() : setOpen(true))}
         className="song-links__icon"
         data-active={open || links.length > 0}
-        title={links.length > 0 ? `${links.length} link${links.length !== 1 ? 's' : ''} — tabs & notation` : 'Add links to tabs & notation'}
+        title={links.length > 0 ? `${links.length} link${links.length !== 1 ? 's' : ''} — tabs & notation` : onChange ? 'Add links to tabs & notation' : 'No links'}
         aria-label="Song links"
         aria-expanded={open}
       >
@@ -95,21 +97,24 @@ export default function SongLinks({ links, onChange }: SongLinksProps) {
                     <a href={link.url} target="_blank" rel="noopener noreferrer" title={link.url} className="song-links__link">
                       {displayLabel(link)}
                     </a>
-                    <button
-                      onClick={() => onChange(links.filter(l => l.id !== link.id))}
-                      className="song-links__remove"
-                      aria-label={`Remove ${displayLabel(link)}`}
-                      title="Remove"
-                    >
-                      ×
-                    </button>
+                    {onChange && (
+                      <button
+                        onClick={() => onChange(links.filter(l => l.id !== link.id))}
+                        className="song-links__remove"
+                        aria-label={`Remove ${displayLabel(link)}`}
+                        title="Remove"
+                      >
+                        ×
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
             ) : (
-              <div className="song-links__empty">No links yet — add tabs, sheet music, videos…</div>
+              <div className="song-links__empty">{onChange ? 'No links yet — add tabs, sheet music, videos…' : 'No links'}</div>
             )}
 
+            {onChange && (
             <div className="song-links__form">
               <input
                 ref={urlRef}
@@ -132,6 +137,7 @@ export default function SongLinks({ links, onChange }: SongLinksProps) {
               />
               <button onClick={handleAdd} className="song-links__add" disabled={!urlInput.trim()}>Add</button>
             </div>
+            )}
             {error && <div className="song-links__error">{error}</div>}
           </div>
         </>

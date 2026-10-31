@@ -7,7 +7,7 @@ Built with React + TypeScript + Vite, packaged as a desktop app with **Tauri v2*
 ## Features
 
 - **Songs → progressions → chords.** Drag to reorder chords and progressions, set beats per chord, BPM per progression, and a time signature. Pair progressions together.
-- **Song fretboard in the header**, directly under the title. It shows the chord you click or that's playing, from any progression: every chord tone across all 24 frets, the chosen voicing highlighted, the root marked, and the next chord previewed. With nothing selected it shows all the notes in the song. It can be collapsed.
+- **Song fretboard in the header**, directly under the title. It shows the chord you click or that's playing, from any progression: every chord tone across all 24 frets, the chosen voicing highlighted, the root marked, and the next chord previewed. With nothing selected it shows all the notes in the song. It can be collapsed, and switched between a flat (theme-coloured) and a wood style.
 - **Chord cards** show a tab box when the chord has a voicing, or a chord diagram of the most common shape when it doesn't.
 - **Default voicings** use the shapes most people play: open chords first, then E/A/D-shape barres. They adapt to the tuning, the capo, and 6-string or bass string counts.
 - **Quick tab editor.** The pencil on a card, or double-clicking its diagram, opens a small editor over the card:
@@ -22,8 +22,9 @@ Built with React + TypeScript + Vite, packaged as a desktop app with **Tauri v2*
 - **Harmonic analysis.** Key detection, Roman numerals, and functions per chord.
 - **Song links.** A link icon next to the title stores URLs to tabs, notation or videos.
 - **Import and export:** Guitar Pro (`.gp3/.gp4/.gp5`) import, PDF export, and JSON backups.
+- **HTML export:** a song as one self-contained, read-only page (fretboard, playback, tuning/capo, themes) that opens offline in any browser and can be imported back from the Songs page. In development, run `npm run build:viewer` once so the export has its viewer page.
 - **Audio.** SpessaSynth plays the bundled GeneralUser GS SoundFont (integrity-checked). Instruments: nylon guitar, piano, pad, strings, organ, and bass for bass tunings. Includes a metronome.
-- Themes, with state stored locally in IndexedDB.
+- **Themes:** light (Warm, Lime, Lavender, Sky, Citrus, Blossom) and dark (Dark, Midnight). All state is stored locally in IndexedDB.
 
 ## Fret & capo conventions
 

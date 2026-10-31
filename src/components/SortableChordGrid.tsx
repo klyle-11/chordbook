@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -26,6 +26,9 @@ import { calculateChordFingering } from '../lib/music/fingering';
 import { getNotesForChord, isValidChord } from '../lib/music/chords';
 import { EditableText } from './EditableText';
 import { useFretboardFocus } from '../lib/fretboardFocus';
+import { suggestChordScale } from '../lib/music/scales';
+
+type FretboardOverlayMode = 'next' | 'mode' | 'off';
 
 function strumChordFrets(frets: (number | null)[], tuning: Tuning) {
   const strings = getTuningStrings(tuning);
@@ -63,6 +66,10 @@ interface SortableChordGridProps {
   harmonicContext?: HarmonicContext;
   /** Progression id — identifies this grid as owner of the header fretboard focus */
   ownerId: string;
+  /** No reordering, removing or voicing changes (exported song viewer) */
+  readOnly?: boolean;
+  /** Exported viewers always show the suggested mode and do not expose overlay controls. */
+  forceModeOverlay?: boolean;
 }
 
 export default function SortableChordGrid({
@@ -80,11 +87,13 @@ export default function SortableChordGrid({
   nextProgressionFirstChord,
   chordAnalyses,
   harmonicContext,
+  readOnly = false,
+  forceModeOverlay = false,
 }: SortableChordGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [showVoicingEditor, setShowVoicingEditor] = useState(false);
   const [quickEditIndex, setQuickEditIndex] = useState<number | null>(null);
-  const [showNextChord, setShowNextChord] = useState(true);
+  const [overlayMode, setOverlayMode] = useState<FretboardOverlayMode>('next');
   const [anticipateNextProgression, setAnticipateNextProgression] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -265,24 +274,35 @@ export default function SortableChordGrid({
     return chord.notes;
   }
 
+  const modeSuggestion = useMemo(
+    () => selectedChord
+      ? suggestChordScale(selectedChord.name, getFullChordNotes(selectedChord), harmonicContext)
+      : null,
+    [selectedChord, harmonicContext]
+  );
+  const effectiveOverlayMode: FretboardOverlayMode = forceModeOverlay ? 'mode' : overlayMode;
+
   // Publish the selected / playing chord to the song-header fretboard
   useEffect(() => {
     if (!selectedChord || selectedIndex === null) {
       setFocus(prev => (prev?.ownerId === ownerId ? null : prev));
       return;
     }
+    const modeContext = effectiveOverlayMode === 'mode' ? modeSuggestion : null;
+    const nextContext = effectiveOverlayMode === 'next' ? previewChord : null;
     setFocus({
       ownerId,
       chordName: selectedChord.name,
       chordNotes: getFullChordNotes(selectedChord),
       voicingFrets: getVoicingFrets(selectedChord),
-      previewName: showNextChord && previewChord ? previewChord.name : undefined,
-      previewNotes: showNextChord && previewChord ? previewChord.notes : undefined,
+      secondaryKind: modeContext ? 'mode' : nextContext ? 'next' : undefined,
+      secondaryName: modeContext?.name || nextContext?.name,
+      secondaryNotes: modeContext?.notes || (nextContext ? getFullChordNotes(nextContext) : undefined),
       onFretClick: showVoicingEditor ? fillFromFretboard : undefined,
     });
     // getVoicingFrets / getFullChordNotes only read soundingTuning and the chord
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownerId, selectedChord, selectedIndex, previewChord, showNextChord, showVoicingEditor, soundingTuning.name, fillFromFretboard, setFocus]);
+  }, [ownerId, selectedChord, selectedIndex, previewChord, effectiveOverlayMode, modeSuggestion, showVoicingEditor, soundingTuning.name, fillFromFretboard, setFocus]);
 
   // Release the fretboard when this progression unmounts (deleted / song closed)
   useEffect(() => () => setFocus(prev => (prev?.ownerId === ownerId ? null : prev)), [ownerId, setFocus]);
@@ -311,6 +331,7 @@ export default function SortableChordGrid({
                 onSelect={handleSelect}
                 chordAnalysis={chordAnalyses?.[index]}
                 harmonicContext={harmonicContext}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -376,17 +397,17 @@ export default function SortableChordGrid({
             </div>
             {selectedChord && selectedIndex !== null && (
             <div className="flex items-center gap-2">
-              {/* Show next chord toggle */}
-              {previewChord && (
+              {/* Fretboard secondary layer: next chord, suggested mode, or off. */}
+              {!forceModeOverlay && previewChord && (
                 <button
-                  onClick={() => setShowNextChord(!showNextChord)}
+                  onClick={() => setOverlayMode(overlayMode === 'next' ? 'off' : 'next')}
                   className="flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors"
                   style={{
-                    background: showNextChord ? 'var(--accent)' : 'transparent',
-                    color: showNextChord ? '#fff' : 'var(--text-muted)',
+                    background: overlayMode === 'next' ? 'var(--accent)' : 'transparent',
+                    color: overlayMode === 'next' ? '#fff' : 'var(--text-muted)',
                     border: '1px solid var(--border)',
                   }}
-                  title={`${showNextChord ? 'Hide' : 'Show'} next chord (${previewChord.name}) on fretboard`}
+                  title={`${overlayMode === 'next' ? 'Hide' : 'Show'} next chord (${previewChord.name}) on fretboard`}
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M13 17l5-5-5-5M6 17l5-5-5-5" />
@@ -394,8 +415,38 @@ export default function SortableChordGrid({
                   {previewChord.name}
                 </button>
               )}
+              {!forceModeOverlay && (
+                <button
+                  onClick={() => setOverlayMode(overlayMode === 'mode' ? 'off' : 'mode')}
+                  disabled={!modeSuggestion}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+                  style={{
+                    background: overlayMode === 'mode' && modeSuggestion ? 'var(--analysis)' : 'transparent',
+                    color: overlayMode === 'mode' && modeSuggestion ? '#000' : 'var(--text-muted)',
+                    border: '1px solid var(--border)',
+                  }}
+                  title={modeSuggestion
+                    ? `${overlayMode === 'mode' ? 'Hide' : 'Show'} ${modeSuggestion.name} on fretboard`
+                    : 'No confident scale or mode matches every chord tone'}
+                >
+                  Mode
+                </button>
+              )}
+              {forceModeOverlay && (
+                <span
+                  className="px-2 py-0.5 rounded text-xs"
+                  style={{
+                    background: modeSuggestion ? 'var(--analysis)' : 'var(--analysis-subtle)',
+                    color: modeSuggestion ? '#000' : 'var(--text-muted)',
+                    border: '1px solid var(--analysis)',
+                  }}
+                  title={modeSuggestion?.name || 'No confident scale or mode matches every chord tone'}
+                >
+                  Mode
+                </span>
+              )}
               {/* Cross-progression anticipation toggle (only on last chord when next progression exists) */}
-              {isLastChord && nextProgressionFirstChord && (
+              {!forceModeOverlay && overlayMode === 'next' && isLastChord && nextProgressionFirstChord && (
                 <button
                   onClick={() => setAnticipateNextProgression(!anticipateNextProgression)}
                   className="flex items-center justify-center rounded transition-colors"
@@ -417,6 +468,7 @@ export default function SortableChordGrid({
                 </button>
               )}
               {/* TAB editor toggle */}
+              {onUpdateVoicing && (
               <button
                 onClick={() => setShowVoicingEditor(!showVoicingEditor)}
                 className="px-2 py-0.5 rounded text-xs transition-colors"
@@ -429,6 +481,7 @@ export default function SortableChordGrid({
               >
                 Tab voicing
               </button>
+              )}
               {/* Close */}
               <button
                 onClick={() => { stopPlayback(); setSelectedIndex(null); setShowVoicingEditor(false); }}

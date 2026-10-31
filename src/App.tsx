@@ -21,8 +21,10 @@ import {
 import { loadTheme, saveTheme, applyTheme, type Theme, themes } from './lib/theme';
 import { findVoicingsForNotes, saveVoicing, getSavedVoicings, hasVoicing } from './lib/savedVoicingLibrary';
 import type { SavedVoicing } from './types/chord';
-import { getAllLeads, saveLead as saveLeadToDb, deleteLead as deleteLeadFromDb } from './lib/leadStorage';
+import { getAllLeads, saveLead as saveLeadToDb, deleteLead as deleteLeadFromDb, migrateLeadFretsToCapoRelative } from './lib/leadStorage';
 import { db } from './lib/db';
+import { loadCustomChords } from './lib/customChordLibrary';
+import { importSongFromHtml } from './lib/htmlExport';
 
 import { analyzeProgression, type ProgressionAnalysis } from './lib/harmonicAnalysis';
 import BackupManager from './components/BackupManager';
@@ -34,6 +36,7 @@ import ThemePicker from './components/ThemePicker';
 import { TimeSignatureSelector } from './components/TimeSignatureSelector';
 import { InstrumentSelector } from './components/InstrumentSelector';
 import SongFretboard from './components/SongFretboard';
+import type { FretboardStyle } from './components/FretboardDiagram';
 import { FretboardFocusContext, type FretboardFocus } from './lib/fretboardFocus';
 import { getUniqueNotesFromSong } from './lib/songAnalysis';
 
@@ -108,6 +111,7 @@ function App() {
   // Chord shown on the song-header fretboard (published by the progression grids)
   const [fretFocus, setFretFocus] = useState<FretboardFocus | null>(null);
   const [fretboardCollapsed, setFretboardCollapsed] = useState(false);
+  const [fretboardStyle, setFretboardStyle] = useState<FretboardStyle>('theme');
   const fretboardFocusValue = useMemo(() => ({ focus: fretFocus, setFocus: setFretFocus }), [fretFocus]);
 
   useEffect(() => {
@@ -117,6 +121,8 @@ function App() {
       setCurrentTheme(theme);
 
       await migrateLocalStorageToDB();
+      // Before songs render: chord lookups read custom chords from this cache
+      await loadCustomChords();
       let loadedSongs = await loadSongsAsync();
 
       // Backfill voicings: apply saved voicings to chords that don't have one
@@ -124,6 +130,7 @@ function App() {
 
       setSongs(loadedSongs);
 
+      await migrateLeadFretsToCapoRelative(loadedSongs);
       const loadedLeads = await getAllLeads();
       setLeads(loadedLeads);
 
@@ -136,6 +143,8 @@ function App() {
       try {
         const collapsedEntry = await db.appState.get('fretboardCollapsed');
         if (collapsedEntry) setFretboardCollapsed(collapsedEntry.value === 'true');
+        const styleEntry = await db.appState.get('fretboardStyle');
+        if (styleEntry?.value === 'wood') setFretboardStyle('wood');
       } catch { /* keep default */ }
 
       // Restore analysis toggle
@@ -254,6 +263,24 @@ function App() {
     setCurrentTuning(DEFAULT_TUNING);
     setCapoSettings({ fret: 0, enabled: false });
     setCurrentBpm(newSong.bpm);
+  }
+
+  /** Import a song from an exported HTML file and open it. */
+  async function handleImportSongFile(file: File) {
+    const song = await importSongFromHtml(await file.text(), songs);
+    // The file's leads were added to the library
+    setLeads(await getAllLeads());
+    setSongs(prevSongs => {
+      const updatedSongs = [...prevSongs, song];
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+    setCurrentSongId(song.id);
+    saveCurrentSong(song.id);
+    setCurrentTuning(song.tuning || DEFAULT_TUNING);
+    setCapoSettings(song.capoSettings || { fret: 0, enabled: false });
+    setCurrentBpm(song.bpm || 120);
+    setCurrentTimeSignature(song.timeSignature || { beatsPerMeasure: 4, beatUnit: 4 });
   }
 
   function handleRenameSong(songId: string, newName: string) {
@@ -802,16 +829,21 @@ function App() {
   const currentSong = currentSongId ? songs.find(s => s.id === currentSongId) ?? null : null;
 
   const progressionAnalysis = useMemo((): ProgressionAnalysis | null => {
-    if (!analysisEnabled || !currentSong) return null;
+    if (!currentSong) return null;
     const allChords = currentSong.progressions.flatMap(p => p.chords);
     if (allChords.length === 0) return null;
     return analyzeProgression(allChords);
-  }, [analysisEnabled, currentSong?.progressions]);
+  }, [currentSong]);
 
   function handleToggleFretboard() {
     const next = !fretboardCollapsed;
     setFretboardCollapsed(next);
     db.appState.put({ key: 'fretboardCollapsed', value: String(next) });
+  }
+
+  function handleFretboardStyleChange(style: FretboardStyle) {
+    setFretboardStyle(style);
+    db.appState.put({ key: 'fretboardStyle', value: style });
   }
 
   const songNotes = useMemo(
@@ -897,6 +929,8 @@ function App() {
                 activeLeadNotes={activeLeadNotes}
                 collapsed={fretboardCollapsed}
                 onToggleCollapsed={handleToggleFretboard}
+                fretboardStyle={fretboardStyle}
+                onStyleChange={handleFretboardStyleChange}
               />
             </div>
           </div>
@@ -918,6 +952,7 @@ function App() {
 
               onDeleteSong={handleDeleteSong}
               onBackToOverview={handleBackToOverview}
+              onImportSongFile={handleImportSongFile}
             />
           </section>
         )}

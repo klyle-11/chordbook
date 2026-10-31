@@ -9,13 +9,23 @@ interface FretboardDiagramProps {
     capoSettings: CapoSettings;
     onFretClick?: (stringIndex: number, fret: number, note: string) => void;
     activeLeadNotes?: string[];
-    previewNotes?: string[];
+    /** Secondary notes are drawn faded behind the active chord/lead notes. */
+    secondaryNotes?: string[];
+    secondaryLabel?: string;
     voicingFrets?: (number | null)[];
     /** Hide the title and outer box (used in the song header) */
     compact?: boolean;
+    /** 'wood': rosewood neck, nickel strings, ivory markers, inlays */
+    variant?: FretboardStyle;
 }
 
-export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick, activeLeadNotes, previewNotes, voicingFrets, compact = false }: FretboardDiagramProps) {
+export type FretboardStyle = 'theme' | 'wood';
+
+// Absolute fret positions of the neck inlays (double dots at 12 and 24)
+const INLAYS = [3, 5, 7, 9, 15, 17, 19, 21];
+const DOUBLE_INLAYS = [12, 24];
+
+export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick, activeLeadNotes, secondaryNotes, secondaryLabel = 'Context', voicingFrets, compact = false, variant = 'theme' }: FretboardDiagramProps) {
     // All fret numbers here (markers, voicingFrets, onFretClick) are relative to the capo,
     // matching tab/voicing convention. Only drawing positions add the capo back.
     const capoFret = getCapoFret(capoSettings);
@@ -25,6 +35,7 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
     const maxRelativeFret = 24 - capoFret;
 
     const chordPcs = new Set(chordNotes.map(pitchClass));
+    const leadPcs = new Set((activeLeadNotes || []).map(pitchClass));
     const rootPc = chordNotes.length > 0 ? pitchClass(chordNotes[0]) : null;
 
     const markersFor = (stringRoot: string, notes: string[]) =>
@@ -61,7 +72,22 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                 )}
             </h3>
             )}
-            <div className="space-y-0.5 sm:space-y-1">
+            <div className={`fretboard-neck space-y-0.5 sm:space-y-1 ${variant === 'wood' ? 'fretboard-neck--wood' : ''}`}>
+                {variant === 'wood' && (
+                    // Inlay overlay, laid out like a string row so dots line up with the frets
+                    <div className="fretboard-neck__inlays" aria-hidden>
+                        <div className="w-6 sm:w-8" />
+                        <div className="relative flex-1 mx-1 sm:mx-2">
+                            {INLAYS.map(f => (
+                                <span key={f} className="fretboard-neck__inlay" style={{ left: `${getFretCenterPosition(f)}%`, top: '50%' }} />
+                            ))}
+                            {DOUBLE_INLAYS.flatMap(f => [30, 70].map(top => (
+                                <span key={`${f}-${top}`} className="fretboard-neck__inlay" style={{ left: `${getFretCenterPosition(f)}%`, top: `${top}%` }} />
+                            )))}
+                        </div>
+                        <div className="w-12 sm:w-20" />
+                    </div>
+                )}
                 {strings.map((stringRoot, stringIndex) => {
                     const chordMarkers = markersFor(stringRoot, chordNotes);
 
@@ -71,7 +97,6 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                         : [];
                     const leadOnlyMarkers = markersFor(stringRoot, leadOnlyNotes);
 
-                    const leadPcs = activeLeadNotes ? new Set(activeLeadNotes.map(pitchClass)) : null;
                     const allMarkerCount = chordMarkers.length + leadOnlyMarkers.length;
 
                     return (
@@ -124,8 +149,8 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                             stringIndex={stringIndex}
                                             tuning={soundingTuning}
                                             onFretClick={onFretClick}
-                                            isLeadNote={leadPcs?.has(pitchClass(marker.note))}
-                                            isOverlap={leadPcs?.has(pitchClass(marker.note))}
+                                            isLeadNote={leadPcs.has(pitchClass(marker.note))}
+                                            isOverlap={leadPcs.has(pitchClass(marker.note))}
                                             isVoicing={voicingSet.has(key)}
                                             isOctaveVoicing={octaveVoicingSet.has(key)}
                                             isRoot={rootPc !== null && pitchClass(marker.note) === rootPc}
@@ -148,11 +173,14 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                     />
                                 ))}
 
-                                {/* Preview/next-chord note markers (faded) */}
-                                {previewNotes && markersFor(stringRoot, previewNotes.filter(n => !chordPcs.has(pitchClass(n))))
+                                {/* Mode / next-chord context markers (faded) */}
+                                {secondaryNotes && markersFor(stringRoot, secondaryNotes.filter(n => {
+                                    const pc = pitchClass(n);
+                                    return !chordPcs.has(pc) && !leadPcs.has(pc);
+                                }))
                                     .map((marker, i) => (
                                         <div
-                                            key={`preview-${marker.note}-${marker.fret}-${i}`}
+                                            key={`secondary-${marker.note}-${marker.fret}-${i}`}
                                             className="absolute w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold border-2 z-5"
                                             style={{
                                                 left: `${getFretCenterPosition(marker.fret + capoFret)}%`,
@@ -164,7 +192,7 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                                 opacity: 0.3,
                                                 pointerEvents: 'none',
                                             }}
-                                            title={`Next: ${marker.note}`}
+                                            title={`${secondaryLabel}: ${marker.note}`}
                                         >
                                             {marker.note}
                                         </div>

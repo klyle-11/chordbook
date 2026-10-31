@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 dist-electron
+dist-viewer
 *.local
 
 # Editor directories and files
@@ -29,3 +30,6 @@ public/soundfonts/*.sf2
 
 # SpessaSynth worklet processor (copied from node_modules via postinstall)
 public/spessasynth_processor.min.js
+
+# Song viewer shell for the HTML export (built by `npm run build:viewer`)
+public/song-viewer.html

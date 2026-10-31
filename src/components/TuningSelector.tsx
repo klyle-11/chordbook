@@ -1,15 +1,38 @@
-import { TUNINGS, type Tuning, type CapoSettings } from '../lib/music/tunings';
+import { useEffect, useState } from 'react';
+import { TUNINGS, getCapoFret, type Tuning, type CapoSettings } from '../lib/music/tunings';
 
 interface TuningSelectorProps {
   currentTuning: Tuning;
   onTuningChange: (tuning: Tuning) => void;
   capoSettings: CapoSettings;
   onCapoChange: (settings: CapoSettings) => void;
+  /** Chords with a saved tab in this song — they'll be re-pitched by a capo change */
+  voicedChordCount?: number;
 }
 
-export default function TuningSelector({ currentTuning, onTuningChange, capoSettings, onCapoChange }: TuningSelectorProps) {
+export default function TuningSelector({ currentTuning, onTuningChange, capoSettings, onCapoChange, voicedChordCount = 0 }: TuningSelectorProps) {
+  // Tab is capo-relative: moving the capo keeps every shape and moves its pitch. Say so.
+  const [capoNotice, setCapoNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!capoNotice) return;
+    const timer = setTimeout(() => setCapoNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [capoNotice]);
+
+  function changeCapo(fret: number) {
+    const delta = fret - getCapoFret(capoSettings);
+    onCapoChange({ fret, enabled: fret > 0 });
+    if (delta !== 0 && voicedChordCount > 0) {
+      const steps = Math.abs(delta);
+      setCapoNotice(
+        `Tabs keep their shapes — ${voicedChordCount} voiced chord${voicedChordCount !== 1 ? 's' : ''} now sound${voicedChordCount === 1 ? 's' : ''} ` +
+        `${steps} semitone${steps !== 1 ? 's' : ''} ${delta > 0 ? 'higher' : 'lower'}`
+      );
+    }
+  }
+
   return (
-    <div className="instrument-strip">
+    <div className="instrument-strip" style={{ position: 'relative' }}>
       {/* Tuning */}
       <div className="instrument-strip__group">
         <select
@@ -34,10 +57,7 @@ export default function TuningSelector({ currentTuning, onTuningChange, capoSett
       <div className="instrument-strip__group">
         <select
           value={capoSettings.enabled ? capoSettings.fret : 0}
-          onChange={e => {
-            const fret = parseInt(e.target.value);
-            onCapoChange({ fret, enabled: fret > 0 });
-          }}
+          onChange={e => changeCapo(parseInt(e.target.value, 10))}
           className="instrument-strip__select instrument-strip__select--compact"
           aria-label="Capo"
         >
@@ -47,6 +67,12 @@ export default function TuningSelector({ currentTuning, onTuningChange, capoSett
           ))}
         </select>
       </div>
+
+      {capoNotice && (
+        <div className="capo-notice" role="status" onClick={() => setCapoNotice(null)}>
+          {capoNotice}
+        </div>
+      )}
     </div>
   );
 }

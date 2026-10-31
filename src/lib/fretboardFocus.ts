@@ -10,8 +10,10 @@ export interface FretboardFocus {
   chordName: string;
   chordNotes: string[];
   voicingFrets?: (number | null)[]; // capo-relative
-  previewName?: string;
-  previewNotes?: string[];
+  /** Faded context around the active chord: either the next chord or a suggested mode. */
+  secondaryKind?: 'next' | 'mode';
+  secondaryName?: string;
+  secondaryNotes?: string[];
   /** Set while the full voicing editor is open: fretboard clicks fill the tab */
   onFretClick?: (stringIndex: number, fret: number, note: string) => void;
 }

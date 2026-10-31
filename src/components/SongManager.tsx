@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Song, SongLink } from '../types/song';
 import { EditableText } from './EditableText';
 import { DEFAULT_TUNING } from '../lib/music/tunings';
@@ -9,6 +9,7 @@ import GPImportModal from './GPImportModal';
 import SongLinks from './SongLinks';
 import type { ImportedProgression, ImportedLead } from './GPImportModal';
 import { getUniqueNotesFromSong } from '../lib/songAnalysis';
+import { exportSongAsHtml } from '../lib/htmlExport';
 import type { Tuning, CapoSettings } from '../lib/music/tunings';
 
 interface SongManagerProps {
@@ -25,6 +26,8 @@ interface SongManagerProps {
   onCapoChange?: (settings: CapoSettings) => void;
   onImportGP?: (progressions: ImportedProgression[], leads: ImportedLead[]) => void;
   onLinksChange?: (songId: string, links: SongLink[]) => void;
+  /** Import a song from an exported HTML file; rejects if the file isn't one */
+  onImportSongFile?: (file: File) => Promise<void>;
 }
 
 export default function SongManager({
@@ -41,6 +44,7 @@ export default function SongManager({
   onCapoChange,
   onImportGP,
   onLinksChange,
+  onImportSongFile,
 }: SongManagerProps) {
   const [showNewSongForm, setShowNewSongForm] = useState(false);
   const [newSongName, setNewSongName] = useState('');
@@ -49,6 +53,33 @@ export default function SongManager({
   const [showAllSongs, setShowAllSongs] = useState(false);
   const [showScaleFlyout, setShowScaleFlyout] = useState(false);
   const [showGPImport, setShowGPImport] = useState(false);
+  const [htmlExport, setHtmlExport] = useState<'idle' | 'working' | 'failed'>('idle');
+  const [importError, setImportError] = useState('');
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportHtml = async (song: Song) => {
+    setHtmlExport('working');
+    try {
+      await exportSongAsHtml(song);
+      setHtmlExport('idle');
+    } catch (error) {
+      console.error('HTML export failed:', error);
+      setHtmlExport('failed');
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // let the same file be picked again
+    if (!file || !onImportSongFile) return;
+    setImportError('');
+    try {
+      await onImportSongFile(file);
+    } catch (error) {
+      console.error('Song import failed:', error);
+      setImportError(`Couldn't import "${file.name}" — it isn't a song exported from Chordbook.`);
+    }
+  };
 
   const sortedSongs = [...songs].sort((a, b) => {
     const aLast = a.lastOpened?.getTime() || 0;
@@ -171,6 +202,9 @@ export default function SongManager({
               onTuningChange={onTuningChange}
               capoSettings={capoSettings}
               onCapoChange={onCapoChange}
+              voicedChordCount={currentSong.progressions.reduce(
+                (n, p) => n + p.chords.filter(c => c.voicing?.tuningId === currentTuning.id).length, 0
+              )}
             />
           )}
 
@@ -220,6 +254,20 @@ export default function SongManager({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <span className="song-header__action-label">PDF</span>
+            </button>
+            <button
+              onClick={() => handleExportHtml(currentSong)}
+              className="song-header__action-btn"
+              disabled={htmlExport === 'working'}
+              title={htmlExport === 'failed'
+                ? 'HTML export failed — the song viewer is missing (npm run build:viewer)'
+                : 'Export as an interactive HTML page (read-only, works offline, can be imported back)'}
+              style={htmlExport === 'failed' ? { color: 'var(--danger)' } : undefined}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l-3 3 3 3m8-6l3 3-3 3m-3-9l-2 12" />
+              </svg>
+              <span className="song-header__action-label">{htmlExport === 'working' ? '…' : 'HTML'}</span>
             </button>
             <button
               onClick={() => setSongToDelete(currentSong.id)}
@@ -298,13 +346,34 @@ export default function SongManager({
         <h2 className="text-xl sm:text-2xl font-bold" style={{ fontFamily: 'var(--font-body)', color: 'var(--text)' }}>
           Songs
         </h2>
-        <button onClick={() => setShowNewSongForm(true)} className="themed-btn-primary flex items-center justify-center gap-2 w-full sm:w-auto">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New Song
-        </button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          {onImportSongFile && (
+            <>
+              <button
+                onClick={() => importInputRef.current?.click()}
+                className="themed-btn-secondary flex items-center justify-center gap-2 flex-1 sm:flex-none"
+                title="Import a song exported as HTML"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Import
+              </button>
+              <input ref={importInputRef} type="file" accept=".html,.htm,text/html" onChange={handleImportFile} hidden />
+            </>
+          )}
+          <button onClick={() => setShowNewSongForm(true)} className="themed-btn-primary flex items-center justify-center gap-2 flex-1 sm:flex-none">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Song
+          </button>
+        </div>
       </div>
+
+      {importError && (
+        <p className="mb-4 text-sm" role="alert" style={{ color: 'var(--danger)' }}>{importError}</p>
+      )}
 
       {showNewSongForm && (
         <div className="mb-6 p-4 rounded-xl" style={{ background: 'var(--accent-subtle)', border: '1px solid var(--border)' }}>

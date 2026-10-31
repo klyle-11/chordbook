@@ -22,6 +22,8 @@ interface DraggableChordCardProps {
   onSelect?: (index: number) => void;
   chordAnalysis?: ChordAnalysis;
   harmonicContext?: HarmonicContext;
+  /** No reordering, removing or voicing changes (exported song viewer) */
+  readOnly?: boolean;
 }
 
 export default function DraggableChordCard({
@@ -37,18 +39,19 @@ export default function DraggableChordCard({
   onSelect,
   chordAnalysis,
   harmonicContext,
+  readOnly = false,
 }: DraggableChordCardProps) {
   const [savedVoicings, setSavedVoicings] = useState<SavedVoicing[]>([]);
   const [showVoicingPicker, setShowVoicingPicker] = useState(false);
 
   useEffect(() => {
-    if (chord.notes.length === 0) return;
+    if (readOnly || chord.notes.length === 0) return;
     let cancelled = false;
     findVoicingsForNotes(chord.notes, tuning.id).then(v => {
       if (!cancelled) setSavedVoicings(v);
     });
     return () => { cancelled = true; };
-  }, [chord.notes, tuning.id]);
+  }, [chord.notes, tuning.id, readOnly]);
 
   const {
     attributes,
@@ -57,7 +60,7 @@ export default function DraggableChordCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `chord-${index}` });
+  } = useSortable({ id: `chord-${index}`, disabled: readOnly });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -107,6 +110,7 @@ export default function DraggableChordCard({
         onClick={() => onSelect?.(index)}
       >
       {/* Compact header: drag handle + action buttons */}
+      {!readOnly && (
       <div className="flex items-center justify-between mb-1">
         <div
           {...listeners}
@@ -208,6 +212,7 @@ export default function DraggableChordCard({
           </button>
         </div>
       </div>
+      )}
 
       {/* Chord notes */}
       {chord.notes.length > 0 && (

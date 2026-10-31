@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && npm run build:viewer && vite build",
+    "build:viewer": "vite build --config vite.viewer.config.ts && cp dist-viewer/viewer.html public/song-viewer.html",
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "tauri",
@@ -45,6 +46,7 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.35.1",
     "vite": "^7.0.4",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^3.2.7"
   }
 }

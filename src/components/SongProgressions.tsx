@@ -36,6 +36,8 @@ interface SortableProgressionItemProps {
   nextProgressionFirstChord?: import('../types/chord').Chord;
   chordAnalyses?: ChordAnalysis[];
   harmonicContext?: HarmonicContext;
+  readOnly?: boolean;
+  forceModeOverlay?: boolean;
 }
 
 function SortableProgressionItem({
@@ -57,6 +59,8 @@ function SortableProgressionItem({
   nextProgressionFirstChord,
   chordAnalyses,
   harmonicContext,
+  readOnly = false,
+  forceModeOverlay = false,
 }: SortableProgressionItemProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAddChord, setShowAddChord] = useState(false);
@@ -67,7 +71,7 @@ function SortableProgressionItem({
     setNodeRef,
     transform,
     transition,
-  } = useSortable({ id: progression.id });
+  } = useSortable({ id: progression.id, disabled: readOnly });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -97,10 +101,11 @@ function SortableProgressionItem({
     >
       <div className="flex items-center p-3 gap-3">
         {/* Drag Handle */}
+        {!readOnly && (
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600 transition-colors"
+          className="cursor-grab active:cursor-grabbing p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
           title="Drag to reorder"
         >
           <div className="w-3 h-3 grid grid-cols-2 gap-0.5">
@@ -110,6 +115,7 @@ function SortableProgressionItem({
             <div className="w-1 h-1 bg-current rounded-full"></div>
           </div>
         </div>
+        )}
 
           {/* Progression Info */}
           <div className="flex-1 min-w-0">
@@ -118,31 +124,34 @@ function SortableProgressionItem({
                 value={progression.name}
                 onChange={(value) => onEdit(progression.id, 'name', value)}
                 placeholder="Untitled Progression"
-                className="text-lg font-medium text-gray-800"
+                className="text-lg font-medium"
                 autoFocus={isNewlyCreated}
+                readOnly={readOnly}
               />
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-[var(--text-muted)]">
                 ({progression.chords.length} chord{progression.chords.length !== 1 ? 's' : ''})
               </span>
             </div>
           </div>
 
           {/* Delete Button */}
+          {!readOnly && (
           <button
             onClick={handleDeleteClick}
-            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+            className="p-1 text-[var(--danger)] hover:bg-[var(--danger-subtle)] rounded transition-colors"
             title="Delete progression"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
+          )}
       </div>
 
       {/* Chord Diagrams + Add Form */}
       <div className="px-3 pb-3">
         {/* Add Chord toggle */}
-        {!showAddChord ? (
+        {readOnly ? null : !showAddChord ? (
           <div className="mb-3">
             <button
               onClick={() => setShowAddChord(true)}
@@ -181,15 +190,17 @@ function SortableProgressionItem({
           tuning={tuning}
           capoSettings={capoSettings}
           onReorder={(oldIndex, newIndex) => onChordReorder(progression.id, oldIndex, newIndex)}
-          onRename={(index, name) => onChordRename(progression.id, index, name)}
+          onRename={readOnly ? undefined : (index, name) => onChordRename(progression.id, index, name)}
           onRemove={(index) => onChordRemove(progression.id, index)}
-          onUpdateVoicing={(index, voicing, renameTo) => onUpdateChordVoicing(progression.id, index, voicing, renameTo)}
+          onUpdateVoicing={readOnly ? undefined : (index, voicing, renameTo) => onUpdateChordVoicing(progression.id, index, voicing, renameTo)}
+          readOnly={readOnly}
           activeLeadNotes={activeLeadNotes}
           bpm={progression.bpm || bpm}
           beatsPerMeasure={beatsPerMeasure}
           nextProgressionFirstChord={nextProgressionFirstChord}
           chordAnalyses={chordAnalyses}
           harmonicContext={harmonicContext}
+          forceModeOverlay={forceModeOverlay}
         />
       </div>
     </div>
@@ -257,6 +268,10 @@ interface SongProgressionsProps {
   analysisEnabled?: boolean;
   progressionAnalysis?: ProgressionAnalysis | null;
   onToggleAnalysis?: () => void;
+  /** View and play only: hides every editing control (exported song viewer) */
+  readOnly?: boolean;
+  /** Keep the faded scale/mode layer on and hide next/mode controls. */
+  forceModeOverlay?: boolean;
 }
 
 export default function SongProgressions({
@@ -295,6 +310,8 @@ export default function SongProgressions({
   analysisEnabled,
   progressionAnalysis,
   onToggleAnalysis,
+  readOnly = false,
+  forceModeOverlay = false,
 }: SongProgressionsProps) {
   const [newlyCreatedProgression, setNewlyCreatedProgression] = useState<string | null>(null);
   const [pairingMode, setPairingMode] = useState(false);
@@ -379,7 +396,7 @@ export default function SongProgressions({
   if (progressions.length === 0) {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-500">No progressions in this song yet.</p>
+        <p className="text-[var(--text-muted)]">No progressions in this song yet.</p>
       </div>
     );
   }
@@ -428,19 +445,20 @@ export default function SongProgressions({
               onClick={() => setActivePairingId(activePairingId === pairing.id ? null : pairing.id)}
             >
               <span>{pairing.name}</span>
-              <span
+              {!readOnly && <span
                 className="pairing-chip__remove"
                 onClick={(e) => { e.stopPropagation(); onDeletePairing(pairing.id); if (activePairingId === pairing.id) setActivePairingId(null); }}
                 title="Remove pairing"
               >
                 &times;
-              </span>
+              </span>}
             </button>
           ))}
         </div>
       )}
 
       {/* Lead Chips */}
+      {!(readOnly && songLeadIds.length === 0) && (
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-ui)' }}>
           Leads:
@@ -457,15 +475,16 @@ export default function SongProgressions({
             onClick={() => onActivateLead(activeLeadId === lead.id ? null : lead.id)}
           >
             <span>{lead.name}</span>
-            <span
+            {!readOnly && <span
               className="ml-1 opacity-60 hover:opacity-100"
               onClick={(e) => { e.stopPropagation(); onDissociateLeadFromSong(lead.id); }}
               title="Remove from song"
             >
               &times;
-            </span>
+            </span>}
           </button>
         ))}
+        {!readOnly && (
         <div style={{ position: 'relative' }}>
           <button
             className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium transition-colors"
@@ -492,7 +511,9 @@ export default function SongProgressions({
             />
           )}
         </div>
+        )}
       </div>
+      )}
 
       {/* Analysis Toggle Chip */}
       {onToggleAnalysis && (
@@ -551,6 +572,7 @@ export default function SongProgressions({
             onDeletePairing={(id) => { onDeletePairing(id); setActivePairingId(null); }}
             onReorderPairingProgressions={onReorderPairingProgressions}
             onClose={() => setActivePairingId(null)}
+            readOnly={readOnly}
           />
         );
       })()}
@@ -564,7 +586,7 @@ export default function SongProgressions({
           {onAddProgression && !pairingMode && (
             <button
               onClick={handleAddProgression}
-              className="flex items-center justify-center w-5 h-5 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
+              className="flex items-center justify-center w-5 h-5 bg-[var(--success)] hover:opacity-85 text-[var(--bg-card)] rounded-full transition-colors"
               title="Add new progression"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -573,7 +595,7 @@ export default function SongProgressions({
             </button>
           )}
         </div>
-        {progressions.length >= 2 && !pairingMode && (
+        {progressions.length >= 2 && !pairingMode && !readOnly && (
           <button
             className="themed-btn-secondary"
             style={{ fontSize: '0.8rem', padding: '4px 12px' }}
@@ -658,9 +680,9 @@ export default function SongProgressions({
                       )
                     : undefined
                 }
-                harmonicContext={
-                  analysisEnabled && progressionAnalysis ? progressionAnalysis.context : undefined
-                }
+                harmonicContext={progressionAnalysis?.context}
+                readOnly={readOnly}
+                forceModeOverlay={forceModeOverlay}
               />
             </div>
           ))}

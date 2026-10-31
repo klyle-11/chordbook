@@ -17,24 +17,56 @@ export function generatePairingId(): string {
 
 // --- Async DB-backed functions ---
 
+/**
+ * Last persisted version of each song, by id. React state is updated immutably, so a
+ * song whose object identity changed is exactly a song that was edited — saveSongs
+ * writes only those (plus deletions) instead of rewriting the whole table.
+ */
+let persisted = new Map<string, Song>();
+
+function rememberPersisted(songs: Song[]): void {
+  persisted = new Map(songs.map(song => [song.id, song]));
+}
+
 export async function loadSongsAsync(): Promise<Song[]> {
   try {
-    return await db.songs.toArray();
+    const songs = await db.songs.toArray();
+    rememberPersisted(songs);
+    return songs;
   } catch (error) {
     console.error('Error loading songs from DB:', error);
     return [];
   }
 }
 
+/** Persist the changed / removed songs relative to the last save. */
 export async function saveSongsAsync(songs: Song[]): Promise<void> {
+  const changed = songs.filter(song => persisted.get(song.id) !== song);
+  const nextIds = new Set(songs.map(song => song.id));
+  const removed = [...persisted.keys()].filter(id => !nextIds.has(id));
+  if (changed.length === 0 && removed.length === 0) return;
+
+  // Update the snapshot before the async write so back-to-back saves don't re-send the same songs
+  rememberPersisted(songs);
   try {
     await db.transaction('rw', db.songs, async () => {
-      await db.songs.clear();
-      await db.songs.bulkPut(songs);
+      if (changed.length > 0) await db.songs.bulkPut(changed);
+      if (removed.length > 0) await db.songs.bulkDelete(removed);
     });
   } catch (error) {
     console.error('Error saving songs to DB:', error);
+    // Forget the snapshot so the next save retries everything that may not have landed
+    for (const song of changed) persisted.delete(song.id);
   }
+}
+
+/** Replace every stored song (backup restore). */
+export async function replaceAllSongsAsync(songs: Song[]): Promise<void> {
+  await db.transaction('rw', db.songs, async () => {
+    await db.songs.clear();
+    await db.songs.bulkPut(songs);
+  });
+  rememberPersisted(songs);
 }
 
 export async function saveCurrentSongAsync(songId: string | null): Promise<void> {

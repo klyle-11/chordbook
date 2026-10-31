@@ -23,12 +23,23 @@ Last reviewed: 2026-09-28. Items are roughly ordered by value within each sectio
 - [x] **Song links:** a link icon next to the title opens a small popover that lists saved links (tabs, notation, videos) and adds new ones. Only http(s) links are accepted; they are stored on the song and included in backups.
 - [x] Removed dead code: 13 unused components, `traditionalChordShapes.ts`, `inputValidation.ts`, and duplicated `CHROMATIC`/`FLAT_TO_SHARP` tables.
 
+- [x] **Themes:** Ocean and Forest (dark page with near-white cards) replaced by light palettes: **Lime**, **Lavender** (periwinkle → indigo), **Sky** (sky blue on sepia-warm neutrals), **Citrus** (yellow → hot orange), **Blossom** (light → hot pink). Warm, Dark and Midnight kept. Saved `ocean`/`forest` choices map to Sky/Lime. Hardcoded grays and whites in chord diagrams, editable titles and progression headers now follow the theme.
+- [x] **Wood fretboard style** (Wood/Flat toggle on the header fretboard): rosewood neck, nickel strings, ivory markers, amber root, pearl inlays. Marker colours are CSS variables (`--marker-*`), so more styles are cheap to add.
+
+## Export / print
+
+- [ ] Consolidated, scale-first export (a single bebop scale map per key area, each unique voicing once, progressions as lead-sheet lines, vector PDF). Full plan: [docs/EXPORT_PLAN.md](docs/EXPORT_PLAN.md).
+
 ## Bugs / correctness
 
-- [ ] **Two fret conventions.** Leads store *absolute* frets (from the nut) while chords store capo-relative frets. Pick one (capo-relative matches tab) and migrate `Lead.notes`.
-- [ ] Voicings store `tuningId` but not the capo. Changing a song's capo re-pitches every saved voicing. That's correct for tab, but it could warn the user ("voicings follow the capo").
-- [ ] `saveSongsAsync` runs `clear()` + `bulkPut(allSongs)` on **every** edit. A crash mid-write can lose data, and it gets slower as the library grows. Use `db.songs.put(song)` for the one song that changed.
-- [ ] Custom chords live in `localStorage`; everything else is in IndexedDB. They're also read and JSON-parsed on every `getNotesForChord` call. Move them into Dexie and cache them in memory.
+- [x] **One fret convention.** Leads are now capo-relative like tab and voicings. A one-time migration (`migrateLeadFretsToCapoRelative`) uses each note's stored name to decide whether it was saved absolute (hand-built) or already relative (Guitar Pro import).
+- [ ] A lead shared by songs with different capos will be pitched by each song's capo. Consider storing the capo on the lead, or warning.
+- [x] Changing the capo shows a notice: "Tabs keep their shapes — N voiced chords now sound k semitones higher/lower".
+- [x] `saveSongs` writes only the songs that changed, plus deletions, compared by object reference against the last save; a failed write retries on the next save. Backup restore uses an explicit `replaceAllSongsAsync`.
+- [x] Custom chords moved to IndexedDB (Dexie v5 `customChords`) with an in-memory cache, and migrated from `localStorage` once.
+- [x] Backups (format 3.1) now include custom chords and the saved-voicing library; 3.0 backups still restore.
+- [ ] `parseChordInput` turns `bb` into a single flat and rejects `E#`/`Cb`; parse with `pitchClass` instead.
+- [ ] Guitar Pro import ignores the track's capo; set the song capo from it.
 - [ ] `backfillVoicings` and `handleAddChord` match library voicings by stripping a `" <n>"` suffix from the name. Store `chordName` on `SavedVoicing` instead.
 - [ ] New progressions are named `Progression <timestamp>`; use "Progression N".
 - [ ] `progressionAnalysis` `useMemo` depends on `currentSong?.progressions` but reads `currentSong` (lint warning).
@@ -63,7 +74,7 @@ The app is small (~12k lines of TS/TSX, excluding CSS) and fast enough. The cost
 ## Theory / voicing code: clarity
 
 - [x] Consolidated into `src/lib/music/` with no React imports: `notes.ts`, `tunings.ts`, `voicings.ts`, `fingering.ts` (moved out of `ChordDiagram.tsx`), `chords.ts`.
-- [x] Unit tests (vitest, `npm test`), 97 tests: `pitchClass` spellings, capo round-trips for every tuning × capo 0–12, the expected standard shapes, every root × quality × tuning (+ capo) sounding only chord tones in one hand position, `findChordByNotes`, `suggestRenameForTab`, and fingering.
+- [x] Unit tests (vitest, `npm test`), 112 tests, including storage diff saves, the lead migration and custom-chord caching: `pitchClass` spellings, capo round-trips for every tuning × capo 0–12, the expected standard shapes, every root × quality × tuning (+ capo) sounding only chord tones in one hand position, `findChordByNotes`, `suggestRenameForTab`, and fingering.
 - [ ] `assignFingerNumbers` is naive: it treats any 3+ strings on the lowest fret as a barre, and doesn't handle partial barres or thumb-over. Store fingers in the shape table instead.
 - [ ] Slash chords and inversions (`C/G`) aren't parsed for diagrams; use tonal's `bass`.
 - [ ] Cycle through alternative voicings (the next shape up the neck) on a card, using the other candidates `lib/music/voicings.ts` already computes.

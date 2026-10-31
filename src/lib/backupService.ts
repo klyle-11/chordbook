@@ -1,22 +1,28 @@
 import type { Song, SavedSong } from '../types/song';
 import type { Lead } from '../types/lead';
-import { loadSongsAsync, saveSongsAsync } from './songStorage';
-import { db } from './db';
+import { loadSongsAsync, replaceAllSongsAsync } from './songStorage';
+import { db, type CustomChord } from './db';
+import type { SavedVoicing } from '../types/chord';
+import { replaceCustomChords } from './customChordLibrary';
 
 interface SavedLead extends Omit<Lead, 'createdAt' | 'updatedAt'> {
   createdAt: string;
   updatedAt: string;
 }
 
+type Serialized<T> = Omit<T, 'createdAt'> & { createdAt: string };
+
 interface BackupData {
   songs: SavedSong[];
   leads?: SavedLead[];
+  customChords?: Serialized<CustomChord>[];   // since 3.1
+  savedVoicings?: Serialized<SavedVoicing>[]; // since 3.1
   timestamp: string;
   version: string;
 }
 
 const BACKUP_STORAGE_KEY = 'chordbook-backup';
-const BACKUP_VERSION = '3.0';
+const BACKUP_VERSION = '3.1';
 
 export async function createBackup(): Promise<BackupData> {
   const songs = await loadSongsAsync();
@@ -45,9 +51,16 @@ export async function createBackup(): Promise<BackupData> {
     updatedAt: lead.updatedAt.toISOString(),
   }));
 
+  const customChords = (await db.customChords.toArray())
+    .map(c => ({ ...c, createdAt: c.createdAt.toISOString() }));
+  const savedVoicings = (await db.savedVoicings.toArray())
+    .map(v => ({ ...v, createdAt: v.createdAt.toISOString() }));
+
   return {
     songs: serializedSongs,
     leads: serializedLeads,
+    customChords,
+    savedVoicings,
     timestamp: new Date().toISOString(),
     version: BACKUP_VERSION
   };
@@ -122,7 +135,7 @@ export async function restoreFromBackup(backup: BackupData): Promise<boolean> {
       lastOpened: savedSong.lastOpened ? new Date(savedSong.lastOpened) : undefined
     }));
 
-    await saveSongsAsync(songs);
+    await replaceAllSongsAsync(songs);
 
     // Restore leads if present
     if (backup.leads && backup.leads.length > 0) {
@@ -133,6 +146,17 @@ export async function restoreFromBackup(backup: BackupData): Promise<boolean> {
       }));
       await db.leads.clear();
       await db.leads.bulkPut(restoredLeads);
+    }
+
+    // Older (3.0) backups don't carry these — leave the current library untouched then
+    if (backup.customChords) {
+      await replaceCustomChords(backup.customChords.map(c => ({ ...c, createdAt: new Date(c.createdAt) })));
+    }
+    if (backup.savedVoicings) {
+      await db.transaction('rw', db.savedVoicings, async () => {
+        await db.savedVoicings.clear();
+        await db.savedVoicings.bulkPut(backup.savedVoicings!.map(v => ({ ...v, createdAt: new Date(v.createdAt) })));
+      });
     }
 
     return true;
