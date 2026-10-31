@@ -553,18 +553,13 @@ input[type="range"]:focus::-webkit-slider-thumb {
   }
 }
 
-/* ─── Scale Flyout ─── */
+/* ─── Scale Fretboard (docked under the song header) ─── */
 
 .scale-flyout {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 45;
-  width: min(680px, calc(100vw - 2rem));
+  margin-top: 8px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--bg-card);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   overflow: hidden;
   animation: fadeIn 0.15s ease-out;
 }
@@ -632,7 +627,38 @@ input[type="range"]:focus::-webkit-slider-thumb {
 
 .scale-flyout__fretboard {
   padding: 8px;
-  overflow-x: auto;
+  overflow: auto;
+  /* Backstop if the window shrinks after the panel was sized */
+  max-height: 45vh;
+}
+
+.scale-flyout__resize {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.scale-flyout__resize::before {
+  content: '';
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-hover);
+  transition: background 0.12s ease;
+}
+
+.scale-flyout__resize:hover::before,
+.scale-flyout__resize:focus-visible::before {
+  background: var(--accent);
+}
+
+.scale-flyout__resize:focus-visible {
+  outline: none;
 }
 
 .scale-flyout__empty {
