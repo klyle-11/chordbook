@@ -1,4 +1,4 @@
-import type { Tuning, CapoSettings } from './tunings';
+import type { Tuning, CapoSettings } from './music/tunings';
 
 export function formatTuningDisplay(tuning: Tuning): string {
   // For standard tuning, just show "Standard", for others show the name

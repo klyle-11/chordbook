@@ -1,9 +1,10 @@
 import { getFretCenterPosition } from '../lib/fretPositions';
 import { audioPlayer } from '../lib/audioPlayer';
-import { type Tuning } from '../lib/tunings';
+import { type Tuning } from '../lib/music/tunings';
 
 interface FretMarkerProps {
-    fret: number;
+    fret: number;       // relative to the capo (what the tab says)
+    capoFret?: number;  // added back only to place the marker on the drawn neck
     note: string;
     guitarString: string;
     stringIndex: number;
@@ -16,7 +17,7 @@ interface FretMarkerProps {
     isRoot?: boolean;
 }
 
-export default function FretMarker({ fret, note, guitarString, stringIndex, tuning, onFretClick, isLeadNote, isOverlap, isVoicing, isOctaveVoicing, isRoot }: FretMarkerProps) {
+export default function FretMarker({ fret, capoFret = 0, note, guitarString, stringIndex, tuning, onFretClick, isLeadNote, isOverlap, isVoicing, isOctaveVoicing, isRoot }: FretMarkerProps) {
     const isOpenNote = fret === 0;
     const isLeadOnly = isLeadNote && !isOverlap;
 
@@ -25,9 +26,10 @@ export default function FretMarker({ fret, note, guitarString, stringIndex, tuni
         onFretClick?.(stringIndex, fret, note);
     };
 
+    // Colours come from --marker-* variables so fretboard styles (e.g. wood) can restyle them
     const baseStyle: React.CSSProperties = isLeadOnly
         ? { background: 'var(--lead)', borderColor: 'var(--lead)', color: '#000' }
-        : { background: 'var(--accent)', borderColor: 'var(--accent-hover)', color: '#fff' };
+        : { background: 'var(--marker-bg)', borderColor: 'var(--marker-border)', color: 'var(--marker-text)' };
 
     const overlapStyle: React.CSSProperties = isOverlap
         ? { boxShadow: '0 0 0 3px var(--lead)' }
@@ -40,14 +42,14 @@ export default function FretMarker({ fret, note, guitarString, stringIndex, tuni
         : {};
 
     const rootStyle: React.CSSProperties = isRoot
-        ? { background: '#6b3a2a', borderColor: '#4a2218', color: '#f0e0d0' }
+        ? { background: 'var(--marker-root-bg)', borderColor: 'var(--marker-root-border)', color: 'var(--marker-root-text)' }
         : {};
 
     return (
         <div
             className="absolute w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold border-2 cursor-pointer group z-10 transition-transform hover:scale-110"
             style={{
-                left: `${getFretCenterPosition(fret)}%`,
+                left: `${getFretCenterPosition(fret + capoFret)}%`,
                 transform: 'translateX(-50%) translateY(-50%)',
                 top: '50%',
                 ...baseStyle,

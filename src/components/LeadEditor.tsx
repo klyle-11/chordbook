@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { Tuning, CapoSettings } from '../lib/tunings';
+import { getSoundingTuning, type Tuning, type CapoSettings } from '../lib/music/tunings';
 import type { LeadNote } from '../types/lead';
 import LeadFretboardDiagram from './LeadFretboardDiagram';
 import LeadNoteSequence from './LeadNoteSequence';
@@ -33,7 +33,9 @@ export default function LeadEditor({ tuning, capoSettings, onSave, onCancel, ini
 
   const handlePreview = async () => {
     for (const n of notes) {
-      await audioPlayer.playNote(n.note, 0.3, tuning.displayStrings[n.stringIndex], n.fret, n.stringIndex, tuning);
+      // Lead frets are capo-relative, so play them on the sounding tuning
+      const sounding = getSoundingTuning(tuning, capoSettings);
+      await audioPlayer.playNote(n.note, 0.3, sounding.displayStrings[n.stringIndex], n.fret, n.stringIndex, sounding);
       await new Promise(resolve => setTimeout(resolve, 250));
     }
   };

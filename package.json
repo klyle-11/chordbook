@@ -6,11 +6,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && npm run build:viewer && vite build",
+    "build:viewer": "vite build --config vite.viewer.config.ts && cp dist-viewer/viewer.html public/song-viewer.html",
     "lint": "eslint .",
     "preview": "vite preview",
     "tauri": "tauri",
-    "postinstall": "cp node_modules/spessasynth_lib/dist/spessasynth_processor.min.js public/"
+    "postinstall": "cp node_modules/spessasynth_lib/dist/spessasynth_processor.min.js public/",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -42,6 +45,8 @@
     "tailwindcss": "^4.1.11",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.35.1",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^3.2.7"
   }
 }

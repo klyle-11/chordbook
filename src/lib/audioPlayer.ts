@@ -1,5 +1,5 @@
 import { WorkletSynthesizer } from 'spessasynth_lib';
-import { type Tuning } from './tunings';
+import { type Tuning } from './music/tunings';
 
 // MIDI semitone offsets for note name -> MIDI number conversion
 const SEMITONE_MAP: Record<string, number> = {

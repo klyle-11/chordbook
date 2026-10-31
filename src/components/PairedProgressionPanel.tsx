@@ -12,6 +12,8 @@ interface PairedProgressionPanelProps {
   onDeletePairing: (pairingId: string) => void;
   onReorderPairingProgressions: (pairingId: string, oldIndex: number, newIndex: number) => void;
   onClose: () => void;
+  /** No renaming, reordering or beat changes (exported song viewer) */
+  readOnly?: boolean;
 }
 
 interface BeatPopoverState {
@@ -35,6 +37,7 @@ export function PairedProgressionPanel({
   onDeletePairing: _onDeletePairing,
   onReorderPairingProgressions,
   onClose,
+  readOnly = false,
 }: PairedProgressionPanelProps) {
   const { beatsPerMeasure } = timeSignature;
   const [isPlaying, setIsPlaying] = useState(false);
@@ -136,6 +139,7 @@ export function PairedProgressionPanel({
     currentBeats: number
   ) => {
     e.stopPropagation();
+    if (readOnly) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const containerRect = timelineRef.current?.getBoundingClientRect();
     if (!containerRect) return;
@@ -175,6 +179,7 @@ export function PairedProgressionPanel({
           onChange={(value) => onRenamePairing(pairing.id, value)}
           placeholder="Untitled Pairing"
           className="paired-panel__title"
+          readOnly={readOnly}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span className="paired-panel__info">
@@ -231,7 +236,7 @@ export function PairedProgressionPanel({
               <div className="paired-panel__row-label" title={progression.name}>
                 <span className="paired-panel__row-name">{progression.name}</span>
                 {/* Row reorder buttons */}
-                {progressions.length > 1 && (
+                {progressions.length > 1 && !readOnly && (
                   <span className="paired-panel__row-arrows">
                     {rowIndex > 0 && (
                       <button

@@ -1,5 +1,6 @@
 import { Chord } from "@tonaljs/tonal";
-import { isCustomChord, getCustomChordNotes } from './customChordLibrary';
+import { isCustomChord, getCustomChordNotes } from '../customChordLibrary';
+import { pitchClass, pitchClassKey } from './notes';
 
 /**
  * Get the pitch classes for a chord name.
@@ -75,53 +76,44 @@ export function getChordSuggestions(input: string): string[] {
  * Returns the chord name if found, null otherwise
  */
 export function findChordByNotes(notes: string[]): string | null {
-  // Normalize the input notes (remove duplicates, sort for comparison)
-  const normalizedInput = [...new Set(notes)].sort();
-  
+  const target = pitchClassKey(notes);
+  if (!target) return null;
+
   // Common chord types to check
   const chordTypes = [
-    "", "m", "7", "maj7", "m7", "dim", "aug", "sus4", "sus2", 
+    "", "m", "7", "maj7", "m7", "dim", "aug", "sus4", "sus2",
     "6", "m6", "9", "m9", "maj9", "11", "13", "add9", "7sus4", "maj7#11"
   ];
-  
-  // Try all root notes
-  const rootNotes = ['C', 'C#', 'D♭', 'D', 'D#', 'E♭', 'E', 'F', 'F#', 'G♭', 'G', 'G#', 'A♭', 'A', 'A#', 'B♭', 'B'];
-  
+
+  // Compare by pitch class, so spelling doesn't matter (D#,G,A# from a tab matches Eb).
+  // Flat roots are listed where they're the conventional name (Eb, Ab, Bb).
+  const rootNotes = ['C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
   for (const root of rootNotes) {
     for (const type of chordTypes) {
       const chordName = root + type;
-      try {
-        const chord = Chord.get(chordName);
-        if (chord.notes && chord.notes.length > 0) {
-          // Normalize the chord notes for comparison
-          const normalizedChord = [...new Set(chord.notes)].sort();
-          
-          // Check if the notes match (allowing for enharmonic equivalents)
-          if (notesMatch(normalizedInput, normalizedChord)) {
-            return chordName;
-          }
-        }
-      } catch {
-        // Skip invalid chord names
-        continue;
+      const chord = Chord.get(chordName);
+      if (chord.notes.length > 0 && pitchClassKey(chord.notes) === target) {
+        return chordName;
       }
     }
   }
-  
+
   return null;
 }
 
 /**
- * Helper function to check if two sets of notes match (considering enharmonic equivalents)
+ * When a tab plays notes outside its chord, suggest the name the tab actually spells
+ * (e.g. C chord + D on top → "Cadd9"). Returns null when the tab fits the chord.
  */
-function notesMatch(notes1: string[], notes2: string[]): boolean {
-  if (notes1.length !== notes2.length) return false;
-  
-  const set1 = new Set(notes1);
-  const set2 = new Set(notes2);
-  
-  // Check if all notes in set1 are in set2 and vice versa
-  // This handles basic note matching - could be enhanced for enharmonic equivalents
-  return notes1.every(note => set2.has(note)) &&
-         notes2.every(note => set1.has(note));
+export function suggestRenameForTab(
+  chordNotes: string[],
+  tabNotes: string[],
+): { outsideNotes: string[]; suggestedName: string } | null {
+  if (chordNotes.length === 0 || tabNotes.length === 0) return null;
+  const chordPcs = new Set(chordNotes.map(pitchClass));
+  const unique = [...new Set(tabNotes)];
+  const outsideNotes = unique.filter(n => !chordPcs.has(pitchClass(n)));
+  if (outsideNotes.length === 0) return null;
+  return { outsideNotes, suggestedName: findChordByNotes(unique) ?? `[${unique.join(', ')}]` };
 }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { Chord, ChordVoicing, SavedVoicing } from '../types/chord';
-import type { Tuning } from '../lib/tunings';
+import type { Tuning } from '../lib/music/tunings';
 import type { ChordAnalysis, HarmonicContext } from '../lib/harmonicAnalysis';
 import { findVoicingsForNotes } from '../lib/savedVoicingLibrary';
 import { ChordDiagram } from './ChordDiagram';
@@ -14,11 +14,16 @@ interface DraggableChordCardProps {
   tuning: Tuning;
   onRemove: (index: number) => void;
   onUpdateVoicing?: (index: number, voicing: ChordVoicing | undefined) => void;
+  onEditVoicing?: (index: number) => void;
+  /** Quick tab editor popover, rendered over this card while open */
+  quickEditor?: React.ReactNode;
   activeLeadNotes?: string[];
   isSelected?: boolean;
   onSelect?: (index: number) => void;
   chordAnalysis?: ChordAnalysis;
   harmonicContext?: HarmonicContext;
+  /** No reordering, removing or voicing changes (exported song viewer) */
+  readOnly?: boolean;
 }
 
 export default function DraggableChordCard({
@@ -27,23 +32,26 @@ export default function DraggableChordCard({
   tuning,
   onRemove,
   onUpdateVoicing,
+  onEditVoicing,
+  quickEditor,
   activeLeadNotes,
   isSelected = false,
   onSelect,
   chordAnalysis,
   harmonicContext,
+  readOnly = false,
 }: DraggableChordCardProps) {
   const [savedVoicings, setSavedVoicings] = useState<SavedVoicing[]>([]);
   const [showVoicingPicker, setShowVoicingPicker] = useState(false);
 
   useEffect(() => {
-    if (chord.notes.length === 0) return;
+    if (readOnly || chord.notes.length === 0) return;
     let cancelled = false;
     findVoicingsForNotes(chord.notes, tuning.id).then(v => {
       if (!cancelled) setSavedVoicings(v);
     });
     return () => { cancelled = true; };
-  }, [chord.notes, tuning.id]);
+  }, [chord.notes, tuning.id, readOnly]);
 
   const {
     attributes,
@@ -52,7 +60,7 @@ export default function DraggableChordCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `chord-${index}` });
+  } = useSortable({ id: `chord-${index}`, disabled: readOnly });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -84,7 +92,8 @@ export default function DraggableChordCard({
   }
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
+      {quickEditor}
       <div
         ref={setNodeRef}
         style={{
@@ -101,6 +110,7 @@ export default function DraggableChordCard({
         onClick={() => onSelect?.(index)}
       >
       {/* Compact header: drag handle + action buttons */}
+      {!readOnly && (
       <div className="flex items-center justify-between mb-1">
         <div
           {...listeners}
@@ -178,6 +188,20 @@ export default function DraggableChordCard({
               )}
             </div>
           )}
+          {onEditVoicing && (
+            <button
+              onClick={() => onEditVoicing(index)}
+              className="px-1 py-0.5 rounded transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              title="Edit tab / voicing"
+              aria-label={`Edit tab for ${chord.name}`}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={() => onRemove(index)}
             className="px-1 py-0.5 rounded transition-colors"
@@ -188,6 +212,7 @@ export default function DraggableChordCard({
           </button>
         </div>
       </div>
+      )}
 
       {/* Chord notes */}
       {chord.notes.length > 0 && (
@@ -213,12 +238,17 @@ export default function DraggableChordCard({
       )}
 
       {/* Chord diagram (TAB when voicing exists, dot-style otherwise) */}
-      <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
+      <div
+        style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}
+        onDoubleClick={onEditVoicing ? (e) => { e.stopPropagation(); onEditVoicing(index); } : undefined}
+        title={onEditVoicing ? 'Double-click to edit tab' : undefined}
+      >
         <ChordDiagram
           chordName={chord.name}
           tuning={tuning}
           voicing={chord.voicing}
           activeLeadNotes={activeLeadNotes}
+          onRequestVoicingEditor={onEditVoicing ? () => onEditVoicing(index) : undefined}
         />
       </div>
 

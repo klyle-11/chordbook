@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getNotesForChord, findChordByNotes } from './lib/chordUtils';
-import { getNotesFromVoicing } from './lib/fretUtils';
-import type { Song, TimeSignature, ChordPairing } from './types/song';
+import { getNotesForChord, findChordByNotes } from './lib/music/chords';
+import { getNotesFromVoicing, pitchClassKey } from './lib/music/notes';
+import type { Song, SongLink, TimeSignature, ChordPairing } from './types/song';
 import type { ChordVoicing } from './types/chord';
 import type { Lead } from './types/lead';
 import type { LeadNote } from './types/lead';
 import type { ImportedProgression, ImportedLead } from './components/GPImportModal';
-import { DEFAULT_TUNING, type Tuning, type CapoSettings } from './lib/tunings';
+import { DEFAULT_TUNING, getSoundingTuning, type Tuning, type CapoSettings } from './lib/music/tunings';
 import {
   saveSongs,
   saveCurrentSong,
@@ -19,10 +19,12 @@ import {
   updateProgressionBpm
 } from './lib/songStorage';
 import { loadTheme, saveTheme, applyTheme, type Theme, themes } from './lib/theme';
-import { findVoicingsForNotes, saveVoicing, getSavedVoicings } from './lib/savedVoicingLibrary';
+import { findVoicingsForNotes, saveVoicing, getSavedVoicings, hasVoicing } from './lib/savedVoicingLibrary';
 import type { SavedVoicing } from './types/chord';
-import { getAllLeads, saveLead as saveLeadToDb, deleteLead as deleteLeadFromDb } from './lib/leadStorage';
+import { getAllLeads, saveLead as saveLeadToDb, deleteLead as deleteLeadFromDb, migrateLeadFretsToCapoRelative } from './lib/leadStorage';
 import { db } from './lib/db';
+import { loadCustomChords } from './lib/customChordLibrary';
+import { importSongFromHtml } from './lib/htmlExport';
 
 import { analyzeProgression, type ProgressionAnalysis } from './lib/harmonicAnalysis';
 import BackupManager from './components/BackupManager';
@@ -33,6 +35,10 @@ import SongProgressions from './components/SongProgressions';
 import ThemePicker from './components/ThemePicker';
 import { TimeSignatureSelector } from './components/TimeSignatureSelector';
 import { InstrumentSelector } from './components/InstrumentSelector';
+import SongFretboard from './components/SongFretboard';
+import type { FretboardStyle } from './components/FretboardDiagram';
+import { FretboardFocusContext, type FretboardFocus } from './lib/fretboardFocus';
+import { getUniqueNotesFromSong } from './lib/songAnalysis';
 
 /**
  * Backfill voicings: for any chord without a voicing, apply the latest
@@ -71,7 +77,7 @@ async function backfillVoicings(songs: Song[]): Promise<Song[]> {
         const noteMatch = sorted.find(v =>
           v.notes.length > 0 &&
           chord.notes.length > 0 &&
-          [...new Set(v.notes)].sort().join(',') === [...new Set(chord.notes)].sort().join(',')
+          pitchClassKey(v.notes) === pitchClassKey(chord.notes)
         );
         if (noteMatch) {
           changed = true;
@@ -102,6 +108,11 @@ function App() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [activeLeadId, setActiveLeadId] = useState<string | null>(null);
   const [analysisEnabled, setAnalysisEnabled] = useState(false);
+  // Chord shown on the song-header fretboard (published by the progression grids)
+  const [fretFocus, setFretFocus] = useState<FretboardFocus | null>(null);
+  const [fretboardCollapsed, setFretboardCollapsed] = useState(false);
+  const [fretboardStyle, setFretboardStyle] = useState<FretboardStyle>('theme');
+  const fretboardFocusValue = useMemo(() => ({ focus: fretFocus, setFocus: setFretFocus }), [fretFocus]);
 
   useEffect(() => {
     async function init() {
@@ -110,6 +121,8 @@ function App() {
       setCurrentTheme(theme);
 
       await migrateLocalStorageToDB();
+      // Before songs render: chord lookups read custom chords from this cache
+      await loadCustomChords();
       let loadedSongs = await loadSongsAsync();
 
       // Backfill voicings: apply saved voicings to chords that don't have one
@@ -117,6 +130,7 @@ function App() {
 
       setSongs(loadedSongs);
 
+      await migrateLeadFretsToCapoRelative(loadedSongs);
       const loadedLeads = await getAllLeads();
       setLeads(loadedLeads);
 
@@ -125,6 +139,13 @@ function App() {
         const activeLeadEntry = await db.appState.get('activeLeadId');
         if (activeLeadEntry) setActiveLeadId(activeLeadEntry.value || null);
       } catch {}
+
+      try {
+        const collapsedEntry = await db.appState.get('fretboardCollapsed');
+        if (collapsedEntry) setFretboardCollapsed(collapsedEntry.value === 'true');
+        const styleEntry = await db.appState.get('fretboardStyle');
+        if (styleEntry?.value === 'wood') setFretboardStyle('wood');
+      } catch { /* keep default */ }
 
       // Restore analysis toggle
       try {
@@ -244,10 +265,38 @@ function App() {
     setCurrentBpm(newSong.bpm);
   }
 
+  /** Import a song from an exported HTML file and open it. */
+  async function handleImportSongFile(file: File) {
+    const song = await importSongFromHtml(await file.text(), songs);
+    // The file's leads were added to the library
+    setLeads(await getAllLeads());
+    setSongs(prevSongs => {
+      const updatedSongs = [...prevSongs, song];
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+    setCurrentSongId(song.id);
+    saveCurrentSong(song.id);
+    setCurrentTuning(song.tuning || DEFAULT_TUNING);
+    setCapoSettings(song.capoSettings || { fret: 0, enabled: false });
+    setCurrentBpm(song.bpm || 120);
+    setCurrentTimeSignature(song.timeSignature || { beatsPerMeasure: 4, beatUnit: 4 });
+  }
+
   function handleRenameSong(songId: string, newName: string) {
     setSongs(prevSongs => {
       const updatedSongs = prevSongs.map(song =>
         song.id === songId ? { ...song, name: newName, updatedAt: new Date() } : song
+      );
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
+  }
+
+  function handleUpdateSongLinks(songId: string, links: SongLink[]) {
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song =>
+        song.id === songId ? { ...song, links, updatedAt: new Date() } : song
       );
       saveSongs(updatedSongs);
       return updatedSongs;
@@ -387,8 +436,25 @@ function App() {
     });
   }
 
-  function handleChordReplace(progressionId: string, chordIndex: number) {
-    console.log('Replace chord at index', chordIndex, 'in progression', progressionId);
+  function handleChordRename(progressionId: string, chordIndex: number, name: string) {
+    if (!currentSongId) return;
+    // Keep the voicing; notes follow the new name (custom [C, E, G] names included)
+    const notes = getNotesForChord(name);
+    setSongs(prevSongs => {
+      const updatedSongs = prevSongs.map(song => {
+        if (song.id !== currentSongId) return song;
+        const updatedProgressions = song.progressions.map(p => {
+          if (p.id !== progressionId) return p;
+          const chords = p.chords.map((c, i) =>
+            i === chordIndex ? { ...c, name, notes: notes.length > 0 ? notes : c.notes } : c
+          );
+          return { ...p, chords, updatedAt: new Date() };
+        });
+        return { ...song, progressions: updatedProgressions, updatedAt: new Date() };
+      });
+      saveSongs(updatedSongs);
+      return updatedSongs;
+    });
   }
 
   function handleChordRemove(progressionId: string, chordIndex: number) {
@@ -411,68 +477,68 @@ function App() {
     });
   }
 
-  async function handleUpdateChordVoicing(progressionId: string, chordIndex: number, voicing: ChordVoicing | undefined) {
+  async function handleUpdateChordVoicing(
+    progressionId: string,
+    chordIndex: number,
+    voicing: ChordVoicing | undefined,
+    renameTo?: string,
+  ) {
     if (!currentSongId) return;
 
-    // Find the chord name being updated so we can propagate
     const song = songs.find(s => s.id === currentSongId);
-    const prog = song?.progressions.find(p => p.id === progressionId);
-    const targetChord = prog?.chords[chordIndex];
-    let resolvedName = targetChord?.name || '';
+    const targetChord = song?.progressions.find(p => p.id === progressionId)?.chords[chordIndex];
+    if (!targetChord) return;
 
-    // For new voicings on empty chords, derive the name
-    if (targetChord && targetChord.notes.length === 0 && voicing) {
-      const derivedNotes = getNotesFromVoicing(currentTuning, voicing.frets);
-      const uniqueNotes = [...new Set(derivedNotes)];
-      const detectedName = findChordByNotes(uniqueNotes);
-      resolvedName = detectedName || (uniqueNotes.length > 0 ? `[${uniqueNotes.join(', ')}]` : '');
+    // Voicing frets are capo-relative, so notes come from the sounding tuning
+    const derivedNotes = voicing
+      ? [...new Set(getNotesFromVoicing(getSoundingTuning(currentTuning, capoSettings), voicing.frets))]
+      : [];
+
+    // Name/notes for the edited chord: explicit rename from the editor, or derived
+    // from the tab when the chord had no notes yet (added as an empty chord)
+    let name = targetChord.name;
+    let notes = targetChord.notes;
+    if (voicing && (renameTo || notes.length === 0)) {
+      name = renameTo || findChordByNotes(derivedNotes) || (derivedNotes.length > 0 ? `[${derivedNotes.join(', ')}]` : name);
+      const named = getNotesForChord(name);
+      notes = named.length > 0 ? named : derivedNotes;
     }
 
-    // Auto-save voicing to the bank
-    if (voicing && resolvedName) {
-      const chordNotes = getNotesForChord(resolvedName);
-      const notes = chordNotes.length > 0 ? chordNotes : (targetChord?.notes || []);
-      // Generate a default name: "Dm7 1", "Dm7 2", etc.
-      const existing = await getSavedVoicings(currentTuning.id);
-      const sameChordCount = existing.filter(v => v.name.startsWith(resolvedName)).length;
-      const defaultName = `${resolvedName} ${sameChordCount + 1}`;
-      saveVoicing({
-        name: defaultName,
-        tuningId: currentTuning.id,
+    // Keep the voicing bank in sync, without piling up duplicates on every apply
+    if (voicing && name && !(await hasVoicing(voicing.frets, voicing.tuningId))) {
+      const existing = await getSavedVoicings(voicing.tuningId);
+      const sameChordCount = existing.filter(v => v.name.replace(/\s+\d+$/, '') === name).length;
+      await saveVoicing({
+        name: `${name} ${sameChordCount + 1}`,
+        tuningId: voicing.tuningId,
         frets: voicing.frets,
-        notes,
+        notes: notes.length > 0 ? notes : derivedNotes,
       });
     }
 
     setSongs(prevSongs => {
-      const updatedSongs = prevSongs.map(song => {
+      const updatedSongs = prevSongs.map(s => {
         let songChanged = false;
-        const updatedProgressions = song.progressions.map(p => {
+        const updatedProgressions = s.progressions.map(p => {
+          let progChanged = false;
           const updatedChords = p.chords.map((c, i) => {
-            // Direct target: apply voicing + derive name if needed
-            if (song.id === currentSongId && p.id === progressionId && i === chordIndex) {
-              songChanged = true;
-              const updated = { ...c, voicing };
-              if (c.notes.length === 0 && voicing) {
-                const derivedNotes = getNotesFromVoicing(currentTuning, voicing.frets);
-                const uniqueNotes = [...new Set(derivedNotes)];
-                updated.notes = uniqueNotes;
-                const detectedName = findChordByNotes(uniqueNotes);
-                if (detectedName) updated.name = detectedName;
-                else if (uniqueNotes.length > 0) updated.name = `[${uniqueNotes.join(', ')}]`;
-              }
-              return updated;
+            if (s.id === currentSongId && p.id === progressionId && i === chordIndex) {
+              progChanged = true;
+              return { ...c, name, notes, voicing };
             }
-            // Propagate: same chord name across ALL songs gets the voicing
-            if (resolvedName && c.name === resolvedName && voicing) {
-              songChanged = true;
+            // Fill same-name chords (in songs with this tuning) that have no voicing yet.
+            // Chords the user already voiced are left alone so edits stay per-chord.
+            if (voicing && !c.voicing && c.name === name && (s.tuning?.id ?? DEFAULT_TUNING.id) === voicing.tuningId) {
+              progChanged = true;
               return { ...c, voicing };
             }
             return c;
           });
-          return songChanged ? { ...p, chords: updatedChords, updatedAt: new Date() } : p;
+          if (!progChanged) return p;
+          songChanged = true;
+          return { ...p, chords: updatedChords, updatedAt: new Date() };
         });
-        return songChanged ? { ...song, progressions: updatedProgressions, updatedAt: new Date() } : song;
+        return songChanged ? { ...s, progressions: updatedProgressions, updatedAt: new Date() } : s;
       });
       saveSongs(updatedSongs);
       return updatedSongs;
@@ -763,11 +829,27 @@ function App() {
   const currentSong = currentSongId ? songs.find(s => s.id === currentSongId) ?? null : null;
 
   const progressionAnalysis = useMemo((): ProgressionAnalysis | null => {
-    if (!analysisEnabled || !currentSong) return null;
+    if (!currentSong) return null;
     const allChords = currentSong.progressions.flatMap(p => p.chords);
     if (allChords.length === 0) return null;
     return analyzeProgression(allChords);
-  }, [analysisEnabled, currentSong?.progressions]);
+  }, [currentSong]);
+
+  function handleToggleFretboard() {
+    const next = !fretboardCollapsed;
+    setFretboardCollapsed(next);
+    db.appState.put({ key: 'fretboardCollapsed', value: String(next) });
+  }
+
+  function handleFretboardStyleChange(style: FretboardStyle) {
+    setFretboardStyle(style);
+    db.appState.put({ key: 'fretboardStyle', value: style });
+  }
+
+  const songNotes = useMemo(
+    () => (currentSong ? getUniqueNotesFromSong(currentSong) : []),
+    [currentSong]
+  );
 
   function handleToggleAnalysis() {
     const next = !analysisEnabled;
@@ -776,6 +858,7 @@ function App() {
   }
 
   return (
+    <FretboardFocusContext.Provider value={fretboardFocusValue}>
     <div className="app-shell" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
 
       {/* ─── Sticky Header ─── */}
@@ -836,6 +919,18 @@ function App() {
                 capoSettings={capoSettings}
                 onCapoChange={handleCapoChange}
                 onImportGP={handleImportGP}
+                onLinksChange={handleUpdateSongLinks}
+              />
+              <SongFretboard
+                focus={fretFocus}
+                songNotes={songNotes}
+                tuning={currentTuning}
+                capoSettings={capoSettings}
+                activeLeadNotes={activeLeadNotes}
+                collapsed={fretboardCollapsed}
+                onToggleCollapsed={handleToggleFretboard}
+                fretboardStyle={fretboardStyle}
+                onStyleChange={handleFretboardStyleChange}
               />
             </div>
           </div>
@@ -857,6 +952,7 @@ function App() {
 
               onDeleteSong={handleDeleteSong}
               onBackToOverview={handleBackToOverview}
+              onImportSongFile={handleImportSongFile}
             />
           </section>
         )}
@@ -873,7 +969,7 @@ function App() {
               onUpdateProgressionBpm={handleUpdateProgressionBpm}
               onDeleteProgression={handleDeleteProgression}
               onChordReorder={handleChordReorder}
-              onChordReplace={handleChordReplace}
+              onChordRename={handleChordRename}
               onChordRemove={handleChordRemove}
               onUpdateChordVoicing={handleUpdateChordVoicing}
               onAddChord={handleAddChord}
@@ -912,6 +1008,7 @@ function App() {
         <BackupManager onDataRestored={() => window.location.reload()} compact />
       </footer>
     </div>
+    </FretboardFocusContext.Provider>
   )
 }
 

@@ -1,9 +1,16 @@
 import type { Chord } from './chord';
-import type { Tuning, CapoSettings } from '../lib/tunings';
+import type { Tuning, CapoSettings } from '../lib/music/tunings';
 
 export interface TimeSignature {
   beatsPerMeasure: number; // numerator, e.g. 4
   beatUnit: number;        // denominator, e.g. 4
+}
+
+/** External reference for a song: tab, notation, video, lyrics… */
+export interface SongLink {
+  id: string;
+  url: string;   // http(s) only — validated on entry
+  label?: string; // falls back to the hostname
 }
 
 export interface ChordPairing {
@@ -33,6 +40,7 @@ export interface Song {
   timeSignature?: TimeSignature;
   pairings?: ChordPairing[];
   leadIds?: string[];
+  links?: SongLink[];
   createdAt: Date;
   updatedAt: Date;
   lastOpened?: Date; // Track when song was last opened

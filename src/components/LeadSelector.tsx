@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Lead } from '../types/lead';
-import type { Tuning } from '../lib/tunings';
-import { TUNINGS } from '../lib/tunings';
+import type { Tuning } from '../lib/music/tunings';
+import { TUNINGS } from '../lib/music/tunings';
 
 interface LeadSelectorProps {
   songLeadIds: string[];

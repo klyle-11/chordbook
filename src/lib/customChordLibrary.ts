@@ -1,70 +1,87 @@
-interface CustomChord {
-  id: string;
-  name: string; // The user's input like "[C, G, C, E]"
-  notes: string[];
-  createdAt: Date;
+import { db, type CustomChord } from './db';
+
+export type { CustomChord };
+
+/**
+ * User-defined chords ("[C, G, C, E]"), stored in IndexedDB.
+ *
+ * Chord lookups (getNotesForChord → isCustomChord) are synchronous and run on every
+ * render, so reads come from an in-memory cache filled once by loadCustomChords()
+ * at startup; writes update the cache immediately and persist in the background.
+ */
+let cache: CustomChord[] = [];
+let byName = new Map<string, CustomChord>();
+
+function setCache(chords: CustomChord[]): void {
+  cache = chords;
+  byName = new Map(chords.map(chord => [chord.name, chord]));
 }
 
-const CUSTOM_CHORDS_KEY = 'chordbook-custom-chords';
+const LEGACY_STORAGE_KEY = 'chordbook-custom-chords';
 
-export function getCustomChords(): CustomChord[] {
+/** Load custom chords into memory, migrating the old localStorage copy once. */
+export async function loadCustomChords(): Promise<void> {
   try {
-    const stored = localStorage.getItem(CUSTOM_CHORDS_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as Array<Omit<CustomChord, 'createdAt'> & { createdAt: string }>;
-      return parsed.map((chord) => ({
-        ...chord,
-        createdAt: new Date(chord.createdAt)
-      }));
+    let chords = await db.customChords.toArray();
+    const legacy = typeof localStorage !== 'undefined' ? localStorage.getItem(LEGACY_STORAGE_KEY) : null;
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as Array<Omit<CustomChord, 'createdAt'> & { createdAt: string }>;
+      const known = new Set(chords.map(c => c.name));
+      const migrated = parsed
+        .filter(c => !known.has(c.name))
+        .map(c => ({ ...c, createdAt: new Date(c.createdAt) }));
+      if (migrated.length > 0) await db.customChords.bulkPut(migrated);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      chords = [...chords, ...migrated];
     }
+    setCache(chords);
   } catch (error) {
     console.error('Error loading custom chords:', error);
   }
-  return [];
 }
 
-export function saveCustomChords(chords: CustomChord[]): void {
-  try {
-    localStorage.setItem(CUSTOM_CHORDS_KEY, JSON.stringify(chords));
-  } catch (error) {
-    console.error('Error saving custom chords:', error);
-  }
+/** Fill the cache without touching the DB (the exported song viewer has none). */
+export function setCustomChords(chords: CustomChord[]): void {
+  setCache(chords);
+}
+
+export function getCustomChords(): CustomChord[] {
+  return cache;
+}
+
+/** Replace the whole library (backup restore). */
+export async function replaceCustomChords(chords: CustomChord[]): Promise<void> {
+  await db.transaction('rw', db.customChords, async () => {
+    await db.customChords.clear();
+    await db.customChords.bulkPut(chords);
+  });
+  setCache(chords);
 }
 
 export function addCustomChord(name: string, notes: string[]): boolean {
-  const existing = getCustomChords();
-  
-  // Check if this exact note sequence already exists
-  const notesString = notes.join(',').toLowerCase();
-  const duplicate = existing.find(chord => 
-    chord.notes.join(',').toLowerCase() === notesString
-  );
-  
-  if (duplicate) {
-    return false; // Chord already exists
+  // Reject an exact duplicate note sequence
+  const notesKey = notes.join(',').toLowerCase();
+  if (cache.some(chord => chord.notes.join(',').toLowerCase() === notesKey)) {
+    return false;
   }
-  
-  const newChord: CustomChord = {
+
+  const chord: CustomChord = {
     id: Date.now().toString(),
     name,
     notes,
-    createdAt: new Date()
+    createdAt: new Date(),
   };
-  
-  const updated = [...existing, newChord];
-  saveCustomChords(updated);
+  setCache([...cache, chord]);
+  db.customChords.put(chord).catch(error => console.error('Error saving custom chord:', error));
   return true;
 }
 
 export function isCustomChord(chordName: string): boolean {
-  const customChords = getCustomChords();
-  return customChords.some(chord => chord.name === chordName);
+  return byName.has(chordName);
 }
 
 export function getCustomChordNotes(chordName: string): string[] {
-  const customChords = getCustomChords();
-  const chord = customChords.find(chord => chord.name === chordName);
-  return chord ? chord.notes : [];
+  return byName.get(chordName)?.notes ?? [];
 }
 
 export function parseChordInput(input: string): { isCustomChord: boolean; notes: string[] } {
@@ -111,7 +128,8 @@ export function parseChordInput(input: string): { isCustomChord: boolean; notes:
 }
 
 export function deleteCustomChord(chordName: string): void {
-  const existing = getCustomChords();
-  const filtered = existing.filter(chord => chord.name !== chordName);
-  saveCustomChords(filtered);
+  const chord = byName.get(chordName);
+  if (!chord) return;
+  setCache(cache.filter(c => c.name !== chordName));
+  db.customChords.delete(chord.id).catch(error => console.error('Error deleting custom chord:', error));
 }
