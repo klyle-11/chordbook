@@ -37,6 +37,7 @@ export default function ViewerApp({ file }: { file: SongFile }) {
   const [fretFocus, setFretFocus] = useState<FretboardFocus | null>(null);
   const [fretboardCollapsed, setFretboardCollapsed] = useState(false);
   const [fretboardStyle, setFretboardStyle] = useState<FretboardStyle>('theme');
+  const [fretboardRowHeight, setFretboardRowHeight] = useState<number | undefined>();
   const fretboardFocusValue = useMemo(() => ({ focus: fretFocus, setFocus: setFretFocus }), [fretFocus]);
 
   function handleThemeChange(theme: Theme) {
@@ -129,6 +130,8 @@ export default function ViewerApp({ file }: { file: SongFile }) {
               onToggleCollapsed={() => setFretboardCollapsed(!fretboardCollapsed)}
               fretboardStyle={fretboardStyle}
               onStyleChange={setFretboardStyle}
+              rowHeight={fretboardRowHeight}
+              onRowHeightChange={setFretboardRowHeight}
             />
           </div>
         </div>

@@ -42,6 +42,10 @@ describe('exported song viewer', () => {
     }
   });
 
+  it('has a resizable fretboard', () => {
+    expect(html).toContain('aria-label="Resize fretboard"');
+  });
+
   it('has no editing controls', () => {
     for (const control of ['Add Chord', 'Delete progression', 'Drag to reorder', 'Remove chord', 'Remove pairing', 'Remove from song', '+ Lead', 'Edit tab', '>Pair<']) {
       expect(html).not.toContain(control);

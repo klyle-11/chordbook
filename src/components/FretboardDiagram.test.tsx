@@ -23,3 +23,31 @@ describe('FretboardDiagram secondary notes', () => {
     expect(html).not.toContain('Mode · C Ionian: D');
   });
 });
+
+describe('FretboardDiagram row height', () => {
+  const render = (rowHeight?: number) => renderToString(
+    <FretboardDiagram
+      compact
+      rowHeight={rowHeight}
+      chordNotes={['C', 'E', 'G']}
+      tuning={TUNINGS[0]}
+      capoSettings={{ enabled: false, fret: 0 }}
+    />
+  );
+
+  it('scales string rows and note markers together', () => {
+    const small = render(16);
+    expect(small).toContain('height:16px');
+    expect(small).toContain('width:14px;height:14px;font-size:7px');
+
+    const large = render(32);
+    expect(large).toContain('height:32px');
+    expect(large).toContain('width:30px;height:30px;font-size:15px');
+  });
+
+  it('keeps the default responsive size when no row height is given', () => {
+    const html = render();
+    expect(html).toContain('space-y-0.5 sm:space-y-1');
+    expect(html).not.toContain('font-size:');
+  });
+});

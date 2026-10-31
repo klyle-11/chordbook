@@ -112,6 +112,7 @@ function App() {
   const [fretFocus, setFretFocus] = useState<FretboardFocus | null>(null);
   const [fretboardCollapsed, setFretboardCollapsed] = useState(false);
   const [fretboardStyle, setFretboardStyle] = useState<FretboardStyle>('theme');
+  const [fretboardRowHeight, setFretboardRowHeight] = useState<number | undefined>();
   const fretboardFocusValue = useMemo(() => ({ focus: fretFocus, setFocus: setFretFocus }), [fretFocus]);
 
   useEffect(() => {
@@ -145,6 +146,8 @@ function App() {
         if (collapsedEntry) setFretboardCollapsed(collapsedEntry.value === 'true');
         const styleEntry = await db.appState.get('fretboardStyle');
         if (styleEntry?.value === 'wood') setFretboardStyle('wood');
+        const rowHeightEntry = await db.appState.get('fretboardRowHeight');
+        if (rowHeightEntry) setFretboardRowHeight(Number(rowHeightEntry.value) || undefined);
       } catch { /* keep default */ }
 
       // Restore analysis toggle
@@ -846,6 +849,11 @@ function App() {
     db.appState.put({ key: 'fretboardStyle', value: style });
   }
 
+  function handleFretboardRowHeightChange(rowHeight: number) {
+    setFretboardRowHeight(rowHeight);
+    db.appState.put({ key: 'fretboardRowHeight', value: String(rowHeight) });
+  }
+
   const songNotes = useMemo(
     () => (currentSong ? getUniqueNotesFromSong(currentSong) : []),
     [currentSong]
@@ -931,6 +939,8 @@ function App() {
                 onToggleCollapsed={handleToggleFretboard}
                 fretboardStyle={fretboardStyle}
                 onStyleChange={handleFretboardStyleChange}
+                rowHeight={fretboardRowHeight}
+                onRowHeightChange={handleFretboardRowHeightChange}
               />
             </div>
           </div>
