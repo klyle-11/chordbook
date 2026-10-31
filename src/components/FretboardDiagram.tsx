@@ -11,13 +11,9 @@ interface FretboardDiagramProps {
     activeLeadNotes?: string[];
     previewNotes?: string[];
     voicingFrets?: (number | null)[];
-    /** Pixel height of each string row; markers and labels scale with it. Omit for the default responsive size. */
-    rowHeight?: number;
-    /** Hide the title row, for panels that already label the fretboard. */
-    hideTitle?: boolean;
 }
 
-export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick, activeLeadNotes, previewNotes, voicingFrets, rowHeight, hideTitle }: FretboardDiagramProps) {
+export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onFretClick, activeLeadNotes, previewNotes, voicingFrets }: FretboardDiagramProps) {
     const effectiveTuning = capoSettings.enabled && capoSettings.fret > 0
         ? applyCapo(tuning, capoSettings.fret)
         : tuning;
@@ -41,28 +37,17 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
             }
         });
     }
-
-    // Explicit sizing: markers, labels and string thickness all scale with the row height
-    const sizing = rowHeight !== undefined ? {
-        marker: { width: rowHeight - 2, height: rowHeight - 2, fontSize: Math.max(7, Math.round((rowHeight - 2) * 0.5)) },
-        label: Math.max(9, Math.round(rowHeight * 0.55)),
-        fretLabel: Math.max(8, Math.round(rowHeight * 0.45)),
-        stringLine: Math.max(2, Math.round(rowHeight / 6)),
-    } : null;
-
     return (
-        <div className={`${hideTitle ? '' : 'mt-3 '}p-2 sm:p-3 rounded-lg`} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
-            {!hideTitle && (
-                <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3" style={{ color: 'var(--text)' }}>
-                    Fretboard
-                    {capoSettings.enabled && capoSettings.fret > 0 && (
-                        <span className="text-xs sm:text-sm font-normal ml-2" style={{ color: 'var(--text-secondary)' }}>
-                            (Capo on fret {capoSettings.fret})
-                        </span>
-                    )}
-                </h3>
-            )}
-            <div className={sizing ? undefined : 'space-y-0.5 sm:space-y-1'}>
+        <div className="mt-3 p-2 sm:p-3 rounded-lg" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+            <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-3" style={{ color: 'var(--text)' }}>
+                Fretboard
+                {capoSettings.enabled && capoSettings.fret > 0 && (
+                    <span className="text-xs sm:text-sm font-normal ml-2" style={{ color: 'var(--text-secondary)' }}>
+                        (Capo on fret {capoSettings.fret})
+                    </span>
+                )}
+            </h3>
+            <div className="space-y-0.5 sm:space-y-1">
                 {strings.map((stringRoot, stringIndex) => {
                     const chordMarkers = chordNotes.flatMap((note) =>
                         getFretsForNoteOnString(stringRoot, note)
@@ -88,14 +73,14 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                     return (
                         <div key={stringIndex} className="flex items-center">
                             {/* String label */}
-                            <div className="w-6 sm:w-8 text-xs sm:text-sm font-medium" style={{ color: 'var(--text-secondary)', fontSize: sizing?.label }}>
+                            <div className="w-6 sm:w-8 text-xs sm:text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
                                 {stringRoot}
                             </div>
 
                             {/* String line with fret markers */}
-                            <div className="relative flex-1 h-4 sm:h-5 mx-1 sm:mx-2 flex items-center" style={{ height: rowHeight }}>
+                            <div className="relative flex-1 h-4 sm:h-5 mx-1 sm:mx-2 flex items-center">
                                 {/* String line */}
-                                <div className="absolute left-0 right-0 h-1 top-1/2 transform -translate-y-1/2" style={{ background: 'var(--fret-string)', height: sizing?.stringLine }}></div>
+                                <div className="absolute left-0 right-0 h-1 top-1/2 transform -translate-y-1/2" style={{ background: 'var(--fret-string)' }}></div>
 
                                 {/* Fret position lines */}
                                 {fretPositions.map((position, fret) => (
@@ -139,7 +124,6 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                             isVoicing={voicingSet.has(key)}
                                             isOctaveVoicing={octaveVoicingSet.has(key)}
                                             isRoot={rootNote !== null && normalizeNote(marker.note) === rootNote}
-                                            sizeStyle={sizing?.marker}
                                         />
                                     );
                                 })}
@@ -155,7 +139,6 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                         tuning={tuning}
                                         onFretClick={onFretClick}
                                         isLeadNote
-                                        sizeStyle={sizing?.marker}
                                     />
                                 ))}
 
@@ -181,7 +164,6 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                                 color: '#fff',
                                                 opacity: 0.3,
                                                 pointerEvents: 'none',
-                                                ...sizing?.marker,
                                             }}
                                             title={`Next: ${marker.note}`}
                                         >
@@ -192,7 +174,7 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                             </div>
 
                             {/* Fret numbers for reference */}
-                            <div className="w-12 sm:w-20 text-xs" style={{ color: 'var(--text-muted)', fontSize: sizing?.fretLabel }}>
+                            <div className="w-12 sm:w-20 text-xs" style={{ color: 'var(--text-muted)' }}>
                                 {allMarkerCount > 0 ? `${allMarkerCount} note${allMarkerCount !== 1 ? 's' : ''}` : 'X'}
                             </div>
                         </div>
@@ -201,10 +183,10 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
             </div>
             
             {/* Fret number labels */}
-            <div className="flex items-center mt-2 sm:mt-3" style={{ marginTop: rowHeight !== undefined ? Math.round(rowHeight / 3) : undefined }}>
+            <div className="flex items-center mt-2 sm:mt-3">
                 <div className="w-6 sm:w-8"></div>
                 <div className="relative flex-1 mx-1 sm:mx-2">
-                    <div className="relative h-3 sm:h-4" style={{ height: sizing ? sizing.fretLabel + 4 : undefined }}>
+                    <div className="relative h-3 sm:h-4">
                         {fretPositions.map((position, fret) => {
                             // For fret 0, position at the nut (divider)
                             // For other frets, position at the center between this fret and the previous one
@@ -224,7 +206,6 @@ export default function FretboardDiagram({ chordNotes, tuning, capoSettings, onF
                                     }`}
                                     style={{
                                         left: `${labelPosition}%`,
-                                        fontSize: sizing?.fretLabel,
                                         color: !isFretAvailable(fret, capoSettings.enabled ? capoSettings.fret : 0)
                                             ? 'var(--fret-divider-muted)'
                                             : capoSettings.enabled && fret === capoSettings.fret

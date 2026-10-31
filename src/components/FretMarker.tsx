@@ -14,10 +14,9 @@ interface FretMarkerProps {
     isVoicing?: boolean;
     isOctaveVoicing?: boolean;
     isRoot?: boolean;
-    sizeStyle?: React.CSSProperties;
 }
 
-export default function FretMarker({ fret, note, guitarString, stringIndex, tuning, onFretClick, isLeadNote, isOverlap, isVoicing, isOctaveVoicing, isRoot, sizeStyle }: FretMarkerProps) {
+export default function FretMarker({ fret, note, guitarString, stringIndex, tuning, onFretClick, isLeadNote, isOverlap, isVoicing, isOctaveVoicing, isRoot }: FretMarkerProps) {
     const isOpenNote = fret === 0;
     const isLeadOnly = isLeadNote && !isOverlap;
 
@@ -51,7 +50,6 @@ export default function FretMarker({ fret, note, guitarString, stringIndex, tuni
                 left: `${getFretCenterPosition(fret)}%`,
                 transform: 'translateX(-50%) translateY(-50%)',
                 top: '50%',
-                ...sizeStyle,
                 ...baseStyle,
                 ...rootStyle,
                 ...overlapStyle,
@@ -64,13 +62,13 @@ export default function FretMarker({ fret, note, guitarString, stringIndex, tuni
                 <>
                     {/* For open notes, show fret number by default, note name on hover */}
                     <span className="group-hover:opacity-0 transition-opacity duration-200">{fret}</span>
-                    <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">{note}</span>
+                    <span className="absolute inset-0 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">{note}</span>
                 </>
             ) : (
                 <>
                     {/* For fretted notes, show fret number by default, note name on hover */}
                     <span className="group-hover:opacity-0 transition-opacity duration-200">{fret}</span>
-                    <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">{note}</span>
+                    <span className="absolute inset-0 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">{note}</span>
                 </>
             )}
         </div>
